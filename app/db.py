@@ -8,7 +8,8 @@ import duckdb
 
 class Database:
     def __init__(self, path: str | Path | None = None) -> None:
-        raw_path = str(path or os.getenv("ALPHALAB_DB_PATH", "data/alpha_lab.duckdb"))
+        default_path = "/tmp/alpha_lab.duckdb" if os.getenv("VERCEL") else "data/alpha_lab.duckdb"
+        raw_path = str(path or os.getenv("ALPHALAB_DB_PATH", default_path))
         self.path = raw_path
         if raw_path != ":memory:":
             Path(raw_path).parent.mkdir(parents=True, exist_ok=True)
