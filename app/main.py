@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -23,11 +24,28 @@ app = FastAPI(title="Alpha Lab", version="0.1.0")
 @app.on_event("startup")
 def startup() -> None:
     database.initialize()
+    if os.getenv("VERCEL"):
+        _seed_demo_data_if_empty()
+
+
+def _seed_demo_data_if_empty() -> None:
+    if repository.stats()["bars"]:
+        return
+    root = Path(__file__).resolve().parents[1]
+    bars_path = root / "sample_data" / "bars.csv"
+    popularity_path = root / "sample_data" / "popularity.csv"
+    if bars_path.exists() and popularity_path.exists():
+        repository.upsert_bars(parse_bars_csv(bars_path.read_bytes()))
+        repository.upsert_popularity(parse_popularity_csv(popularity_path.read_bytes()))
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, str | bool]:
+    return {
+        "status": "ok",
+        "runtime": "vercel" if os.getenv("VERCEL") else "local",
+        "persistent_storage": not bool(os.getenv("VERCEL")),
+    }
 
 
 @app.get("/api/data/stats", response_model=DataStats)
