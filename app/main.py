@@ -4,13 +4,14 @@ import os
 import secrets
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.db import Database
 from app.models import (
     DataStats,
+    EventSamplePage,
     EventStudyRequest,
     EventStudyResult,
     HistoricalSyncRequest,
@@ -26,7 +27,7 @@ database = Database()
 repository = MarketRepository(database)
 engine = EventStudyEngine(database)
 
-app = FastAPI(title="Alpha Lab", version="0.3.0")
+app = FastAPI(title="Alpha Lab", version="0.4.0")
 
 
 def require_write_access(
@@ -52,7 +53,6 @@ def startup() -> None:
 def _seed_demo_data_if_empty() -> None:
     if repository.stats()["bars"]:
         return
-
     bars = [
         ("000001.SZ", "2026-01-05", 9.8, 10.2, 9.7, 10.0, 8.0),
         ("000001.SZ", "2026-01-06", 10.1, 11.2, 10.0, 11.0, 8.0),
@@ -97,11 +97,7 @@ def data_stats() -> DataStats:
     return DataStats(**repository.stats())
 
 
-@app.post(
-    "/api/import/bars",
-    response_model=ImportResult,
-    dependencies=[Depends(require_write_access)],
-)
+@app.post("/api/import/bars", response_model=ImportResult, dependencies=[Depends(require_write_access)])
 async def import_bars(file: UploadFile = File(...)) -> ImportResult:
     try:
         rows = parse_bars_csv(await file.read())
@@ -110,11 +106,7 @@ async def import_bars(file: UploadFile = File(...)) -> ImportResult:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post(
-    "/api/import/popularity",
-    response_model=ImportResult,
-    dependencies=[Depends(require_write_access)],
-)
+@app.post("/api/import/popularity", response_model=ImportResult, dependencies=[Depends(require_write_access)])
 async def import_popularity(file: UploadFile = File(...)) -> ImportResult:
     try:
         rows = parse_popularity_csv(await file.read())
@@ -123,28 +115,17 @@ async def import_popularity(file: UploadFile = File(...)) -> ImportResult:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post(
-    "/api/sync/historical",
-    response_model=HistoricalSyncResult,
-    dependencies=[Depends(require_write_access)],
-)
+@app.post("/api/sync/historical", response_model=HistoricalSyncResult, dependencies=[Depends(require_write_access)])
 def sync_historical(request: HistoricalSyncRequest) -> HistoricalSyncResult:
     if os.getenv("VERCEL"):
-        raise HTTPException(
-            status_code=409,
-            detail="Real-data sync is disabled on ephemeral Vercel storage; deploy to persistent storage first.",
-        )
+        raise HTTPException(status_code=409, detail="Real-data sync is disabled on ephemeral Vercel storage; deploy to persistent storage first.")
 
     from app.providers.baostock import BaoStockClient, BaoStockError
     from app.providers.hithink import HiThinkClient, HiThinkError
     from app.services.sync import HistoricalSignalSyncService
 
     try:
-        summary = HistoricalSignalSyncService(
-            HiThinkClient(),
-            BaoStockClient(),
-            repository,
-        ).sync(
+        summary = HistoricalSignalSyncService(HiThinkClient(), BaoStockClient(), repository).sync(
             request.start_date,
             request.end_date,
             max_rank=request.max_rank,
@@ -166,6 +147,15 @@ def sync_historical(request: HistoricalSyncRequest) -> HistoricalSyncResult:
 @app.post("/api/analyze", response_model=EventStudyResult)
 def analyze(request: EventStudyRequest) -> EventStudyResult:
     return engine.run(request)
+
+
+@app.post("/api/analyze/samples", response_model=EventSamplePage)
+def analyze_samples(
+    request: EventStudyRequest,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> EventSamplePage:
+    return engine.samples(request, limit=limit, offset=offset)
 
 
 STATIC_DIR = Path(__file__).parent / "static"

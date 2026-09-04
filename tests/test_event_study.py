@@ -8,10 +8,7 @@ from app.repository import MarketRepository
 from app.services.event_study import EventStudyEngine
 
 
-def test_event_study_filters_forward_returns_and_coverage(tmp_path):
-    db = Database(tmp_path / "test.duckdb")
-    db.initialize()
-    repo = MarketRepository(db)
+def _seed(repo: MarketRepository) -> None:
     repo.upsert_bars(
         [
             ("000001.SZ", "2026-01-05", 9.8, 10.2, 9.7, 10.0, 8.0),
@@ -31,20 +28,28 @@ def test_event_study_filters_forward_returns_and_coverage(tmp_path):
         ]
     )
 
-    result = EventStudyEngine(db).run(
-        EventStudyRequest(
-            start_date=date(2026, 1, 5),
-            end_date=date(2026, 1, 9),
-            turnover_min=5,
-            turnover_max=10,
-            popularity_rank_min=1,
-            popularity_rank_max=20,
-            horizons=[1, 3, 4],
-        )
+
+def _request() -> EventStudyRequest:
+    return EventStudyRequest(
+        start_date=date(2026, 1, 5),
+        end_date=date(2026, 1, 9),
+        turnover_min=5,
+        turnover_max=10,
+        popularity_rank_min=1,
+        popularity_rank_max=20,
+        horizons=[1, 3, 4],
     )
 
-    assert result.event_count == 2
 
+def test_event_study_filters_forward_returns_and_coverage(tmp_path):
+    db = Database(tmp_path / "test.duckdb")
+    db.initialize()
+    repo = MarketRepository(db)
+    _seed(repo)
+
+    result = EventStudyEngine(db).run(_request())
+
+    assert result.event_count == 2
     one_day = result.stats[0]
     assert one_day.horizon == 1
     assert one_day.sample_count == 2
@@ -65,3 +70,26 @@ def test_event_study_filters_forward_returns_and_coverage(tmp_path):
     assert four_day.coverage_rate == pytest.approx(50.0)
     assert four_day.positive_rate == pytest.approx(100.0)
     assert four_day.average_return == pytest.approx(30.0)
+
+
+def test_event_sample_page_exposes_underlying_observations(tmp_path):
+    db = Database(tmp_path / "samples.duckdb")
+    db.initialize()
+    repo = MarketRepository(db)
+    _seed(repo)
+
+    page = EventStudyEngine(db).samples(_request(), limit=10)
+
+    assert page.total_count == 2
+    assert len(page.samples) == 2
+    latest = page.samples[0]
+    assert latest.trade_date == date(2026, 1, 6)
+    assert latest.symbol == "000001.SZ"
+    assert latest.turnover_rate == pytest.approx(8.0)
+    assert latest.popularity_rank == 15
+    assert latest.forward_returns["1d"] == pytest.approx(-18.181818, abs=1e-5)
+    assert latest.forward_returns["4d"] is None
+
+    earliest = page.samples[1]
+    assert earliest.trade_date == date(2026, 1, 5)
+    assert earliest.forward_returns["4d"] == pytest.approx(30.0)

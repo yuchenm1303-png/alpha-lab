@@ -58,6 +58,22 @@ class EventStudyResult(BaseModel):
     stats: list[HorizonStat]
 
 
+class EventSample(BaseModel):
+    symbol: str
+    trade_date: date
+    turnover_rate: float
+    popularity_rank: int
+    close: float
+    forward_returns: dict[str, float | None]
+
+
+class EventSamplePage(BaseModel):
+    total_count: int
+    limit: int
+    offset: int
+    samples: list[EventSample]
+
+
 class HistoricalSyncResult(BaseModel):
     start_date: date
     end_date: date

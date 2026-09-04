@@ -22,7 +22,8 @@
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
     .metric { background: #f8fafc; border-radius: 12px; padding: 14px; }
     .metric strong { display: block; font-size: 22px; margin-top: 4px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; white-space: nowrap; }
     th, td { text-align: right; padding: 12px 10px; border-bottom: 1px solid #edf0f3; }
     th:first-child, td:first-child { text-align: left; }
     .status { min-height: 22px; margin-top: 10px; font-size: 13px; color: #475467; }
@@ -96,14 +97,27 @@
       <div class="metric"><span class="muted">数据日线条数</span><strong id="barCount">—</strong></div>
       <div class="metric"><span class="muted">人气记录条数</span><strong id="popCount">—</strong></div>
     </div>
-    <table>
+    <div class="table-wrap"><table>
       <thead><tr><th>未来交易日</th><th>有效样本</th><th>覆盖率</th><th>红盘率</th><th>平均涨幅</th><th>中位涨幅</th><th>波动</th></tr></thead>
       <tbody id="resultBody"><tr><td colspan="7" class="muted">准备数据后开始统计</td></tr></tbody>
-    </table>
+    </table></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h3>样本明细</h3>
+    <p class="muted">用于核查统计结果。按事件日期倒序显示前 100 条符合条件的历史样本。</p>
+    <button id="sampleButton" class="secondary" onclick="loadSamples()" disabled>查看前 100 条样本</button>
+    <div id="sampleStatus" class="status"></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>日期</th><th>股票</th><th>换手率</th><th>人气排名</th><th>事件收盘价</th><th>1日</th><th>3日</th><th>5日</th><th>10日</th><th>20日</th></tr></thead>
+      <tbody id="sampleBody"><tr><td colspan="10" class="muted">先运行一次统计</td></tr></tbody>
+    </table></div>
   </section>
 </main>
 <script>
   const fmt = value => value == null ? '—' : `${value.toFixed(2)}%`;
+  const price = value => value == null ? '—' : Number(value).toFixed(2);
+  let lastAnalysisPayload = null;
   const today = new Date();
   const monthAgo = new Date(today); monthAgo.setMonth(today.getMonth() - 1);
   const yearAgo = new Date(today); yearAgo.setFullYear(today.getFullYear() - 1);
@@ -115,6 +129,18 @@
 
   function writeHeaders() {
     return { 'X-Admin-Token': document.getElementById('adminToken').value };
+  }
+
+  function analysisPayload() {
+    return {
+      start_date: document.getElementById('startDate').value,
+      end_date: document.getElementById('endDate').value,
+      turnover_min: Number(document.getElementById('turnoverMin').value),
+      turnover_max: Number(document.getElementById('turnoverMax').value),
+      popularity_rank_min: Number(document.getElementById('rankMin').value),
+      popularity_rank_max: Number(document.getElementById('rankMax').value),
+      horizons: [1,3,5,10,20]
+    };
   }
 
   async function refreshHealth() {
@@ -179,23 +205,33 @@
 
   async function analyze() {
     const status = document.getElementById('analysisStatus'); status.textContent = '统计中…';
-    const payload = {
-      start_date: document.getElementById('startDate').value,
-      end_date: document.getElementById('endDate').value,
-      turnover_min: Number(document.getElementById('turnoverMin').value),
-      turnover_max: Number(document.getElementById('turnoverMax').value),
-      popularity_rank_min: Number(document.getElementById('rankMin').value),
-      popularity_rank_max: Number(document.getElementById('rankMax').value),
-      horizons: [1,3,5,10,20]
-    };
+    const payload = analysisPayload();
     try {
       const res = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       const data = await res.json(); if (!res.ok) throw new Error(data.detail?.[0]?.msg || data.detail || '统计失败');
       document.getElementById('eventCount').textContent = data.event_count.toLocaleString();
       document.getElementById('resultBody').innerHTML = data.stats.map(x => `<tr><td>${x.horizon} 日</td><td>${x.sample_count}</td><td>${fmt(x.coverage_rate)}</td><td>${fmt(x.positive_rate)}</td><td>${fmt(x.average_return)}</td><td>${fmt(x.median_return)}</td><td>${fmt(x.return_stddev)}</td></tr>`).join('');
       status.textContent = `完成：找到 ${data.event_count} 个历史事件`;
+      lastAnalysisPayload = payload;
+      document.getElementById('sampleButton').disabled = false;
+      document.getElementById('sampleBody').innerHTML = '<tr><td colspan="10" class="muted">点击上方按钮查看本次条件的样本</td></tr>';
     } catch (e) { status.textContent = e.message; }
   }
+
+  async function loadSamples() {
+    if (!lastAnalysisPayload) return;
+    const status = document.getElementById('sampleStatus'); status.textContent = '读取样本中…';
+    try {
+      const res = await fetch('/api/analyze/samples?limit=100&offset=0', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(lastAnalysisPayload) });
+      const data = await res.json(); if (!res.ok) throw new Error(data.detail || '读取样本失败');
+      const cell = (returns, key) => fmt(returns[key]);
+      document.getElementById('sampleBody').innerHTML = data.samples.length
+        ? data.samples.map(x => `<tr><td>${x.trade_date}</td><td>${x.symbol}</td><td>${fmt(x.turnover_rate)}</td><td>${x.popularity_rank}</td><td>${price(x.close)}</td><td>${cell(x.forward_returns,'1d')}</td><td>${cell(x.forward_returns,'3d')}</td><td>${cell(x.forward_returns,'5d')}</td><td>${cell(x.forward_returns,'10d')}</td><td>${cell(x.forward_returns,'20d')}</td></tr>`).join('')
+        : '<tr><td colspan="10" class="muted">没有符合条件的样本</td></tr>';
+      status.textContent = `共 ${data.total_count} 条，当前显示 ${data.samples.length} 条`;
+    } catch (e) { status.textContent = e.message; }
+  }
+
   refreshHealth();
   refreshStats();
 </script>
