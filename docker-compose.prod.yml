@@ -1,0 +1,18 @@
+services:
+  alpha-lab:
+    image: ghcr.io/yuchenm1303-png/alpha-lab:latest
+    build:
+      context: .
+    container_name: alpha-lab
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8091:8000"
+    environment:
+      ALPHALAB_DB_PATH: /data/alpha_lab.duckdb
+      HITHINK_API_KEY: ${HITHINK_API_KEY:-}
+      HITHINK_BASE_URL: ${HITHINK_BASE_URL:-https://fuyao.aicubes.cn}
+    volumes:
+      - alpha-lab-data:/data
+
+volumes:
+  alpha-lab-data:
