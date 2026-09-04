@@ -9,15 +9,17 @@
     body { margin: 0; background: #f5f7fa; color: #172033; }
     main { width: min(1100px, calc(100% - 32px)); margin: 40px auto 72px; }
     h1 { margin-bottom: 6px; font-size: 32px; }
+    h3 { margin-top: 0; }
     .muted { color: #667085; }
     .notice { margin: 18px 0; padding: 13px 16px; border-radius: 12px; background: #fff7e8; border: 1px solid #f2d39d; color: #7a4b00; }
     .notice.ok { background: #ecfdf3; border-color: #abefc6; color: #067647; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
     .card { background: white; border: 1px solid #e6eaf0; border-radius: 16px; padding: 20px; box-shadow: 0 8px 24px rgba(16,24,40,.04); }
     label { display: block; margin: 12px 0 6px; font-size: 13px; color: #475467; }
-    input, button { box-sizing: border-box; width: 100%; border-radius: 10px; border: 1px solid #d0d5dd; padding: 10px 12px; font: inherit; }
+    input, select, button { box-sizing: border-box; width: 100%; border-radius: 10px; border: 1px solid #d0d5dd; padding: 10px 12px; font: inherit; background: white; }
     button { border: 0; background: #172033; color: white; cursor: pointer; font-weight: 600; margin-top: 16px; }
     button.secondary { background: #eef2f6; color: #172033; }
+    button.danger { background: #fff1f0; color: #b42318; border: 1px solid #fecdca; }
     button:disabled { opacity: .5; cursor: not-allowed; }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
     .metric { background: #f8fafc; border-radius: 12px; padding: 14px; }
@@ -27,13 +29,26 @@
     th, td { text-align: right; padding: 12px 10px; border-bottom: 1px solid #edf0f3; }
     th:first-child, td:first-child { text-align: left; }
     .status { min-height: 22px; margin-top: 10px; font-size: 13px; color: #475467; }
-    @media (max-width: 700px) { .stats { grid-template-columns: 1fr; } }
+    .factor-toolbar { display: flex; gap: 10px; margin-top: 14px; }
+    .factor-toolbar button { width: auto; margin-top: 0; }
+    .factor-row { display: grid; grid-template-columns: minmax(180px, 1.5fr) 1fr 1fr auto; gap: 10px; align-items: end; padding: 12px 0; border-bottom: 1px solid #edf0f3; }
+    .factor-row:last-child { border-bottom: 0; }
+    .factor-row label { margin-top: 0; }
+    .factor-row .remove { width: auto; min-width: 74px; margin: 0; }
+    .factor-help { margin-top: 5px; font-size: 12px; color: #98a2b3; }
+    @media (max-width: 700px) {
+      .stats { grid-template-columns: 1fr; }
+      .factor-row { grid-template-columns: 1fr; }
+      .factor-row .remove { width: 100%; }
+      .factor-toolbar { flex-direction: column; }
+      .factor-toolbar button { width: 100%; }
+    }
   </style>
 </head>
 <body>
 <main>
   <h1>Alpha Lab</h1>
-  <p class="muted">历史条件事件统计：换手率 × 人气排名 → 后续收益表现</p>
+  <p class="muted">多因子历史事件研究：组合条件 → 后续 1 / 3 / 5 / 10 / 20 个交易日表现</p>
   <div id="runtimeNotice" class="notice">正在检查数据运行环境…</div>
 
   <section class="card" style="margin-bottom:16px">
@@ -71,19 +86,22 @@
   </div>
 
   <section class="card" style="margin-top:16px">
-    <h3>设置历史条件</h3>
+    <h3>历史研究条件</h3>
     <div class="grid">
       <div>
         <label>开始日期</label><input id="startDate" type="date" />
+      </div>
+      <div>
         <label>结束日期</label><input id="endDate" type="date" />
       </div>
-      <div>
-        <label>换手率最小值 (%)</label><input id="turnoverMin" type="number" step="0.01" value="5" />
-        <label>换手率最大值 (%)</label><input id="turnoverMax" type="number" step="0.01" value="15" />
-      </div>
-      <div>
-        <label>人气排名最小值</label><input id="rankMin" type="number" value="1" />
-        <label>人气排名最大值</label><input id="rankMax" type="number" value="30" />
+    </div>
+    <div style="margin-top:18px">
+      <strong>因子条件</strong>
+      <p class="muted" style="margin:6px 0 0">所有条件同时满足。留空一侧表示只限制下限或上限。</p>
+      <div id="factorRows"></div>
+      <div class="factor-toolbar">
+        <button class="secondary" type="button" onclick="addFactorRow()">+ 添加条件</button>
+        <button class="secondary" type="button" onclick="resetDefaultFactors()">恢复默认条件</button>
       </div>
     </div>
     <button onclick="analyze()">开始统计</button>
@@ -109,15 +127,21 @@
     <button id="sampleButton" class="secondary" onclick="loadSamples()" disabled>查看前 100 条样本</button>
     <div id="sampleStatus" class="status"></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>日期</th><th>股票</th><th>换手率</th><th>人气排名</th><th>事件收盘价</th><th>1日</th><th>3日</th><th>5日</th><th>10日</th><th>20日</th></tr></thead>
-      <tbody id="sampleBody"><tr><td colspan="10" class="muted">先运行一次统计</td></tr></tbody>
+      <thead id="sampleHead"><tr><th>日期</th><th>股票</th><th>事件收盘价</th><th>1日</th><th>3日</th><th>5日</th><th>10日</th><th>20日</th></tr></thead>
+      <tbody id="sampleBody"><tr><td colspan="8" class="muted">先运行一次统计</td></tr></tbody>
     </table></div>
   </section>
 </main>
 <script>
-  const fmt = value => value == null ? '—' : `${value.toFixed(2)}%`;
+  const fmtPct = value => value == null ? '—' : `${Number(value).toFixed(2)}%`;
   const price = value => value == null ? '—' : Number(value).toFixed(2);
+  const escapeHtml = value => String(value ?? '')
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+  const horizons = [1,3,5,10,20];
+  let factorCatalog = [];
   let lastAnalysisPayload = null;
+
   const today = new Date();
   const monthAgo = new Date(today); monthAgo.setMonth(today.getMonth() - 1);
   const yearAgo = new Date(today); yearAgo.setFullYear(today.getFullYear() - 1);
@@ -131,16 +155,117 @@
     return { 'X-Admin-Token': document.getElementById('adminToken').value };
   }
 
+  function factorInfo(id) {
+    return factorCatalog.find(item => item.id === id);
+  }
+
+  function formatFactor(value, factorId) {
+    if (value == null) return '—';
+    const info = factorInfo(factorId);
+    if (info?.unit === 'percent') return fmtPct(value);
+    if (info?.unit === 'rank') return String(Math.round(Number(value)));
+    return Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+  }
+
+  function selectedFactorIds() {
+    return [...document.querySelectorAll('.factor-row select')].map(el => el.value);
+  }
+
+  function nextAvailableFactorId() {
+    const selected = new Set(selectedFactorIds());
+    return factorCatalog.find(item => !selected.has(item.id))?.id || factorCatalog[0]?.id || '';
+  }
+
+  function addFactorRow(factorId = null, minValue = '', maxValue = '') {
+    if (!factorCatalog.length) return;
+    const id = factorId || nextAvailableFactorId();
+    if (!id) return;
+    const info = factorInfo(id) || factorCatalog[0];
+    const row = document.createElement('div');
+    row.className = 'factor-row';
+
+    const factorBox = document.createElement('div');
+    const factorLabel = document.createElement('label');
+    factorLabel.textContent = '因子';
+    const select = document.createElement('select');
+    for (const factor of factorCatalog) {
+      const option = document.createElement('option');
+      option.value = factor.id;
+      option.textContent = `${factor.label} · ${factor.group}`;
+      if (factor.id === id) option.selected = true;
+      select.appendChild(option);
+    }
+    const help = document.createElement('div');
+    help.className = 'factor-help';
+    const updateHelp = () => {
+      const current = factorInfo(select.value);
+      help.textContent = current?.description || '';
+    };
+    select.addEventListener('change', updateHelp);
+    factorBox.append(factorLabel, select, help);
+
+    const minBox = document.createElement('div');
+    const minLabel = document.createElement('label');
+    minLabel.textContent = '最小值';
+    const minInput = document.createElement('input');
+    minInput.type = 'number'; minInput.step = 'any'; minInput.value = minValue;
+    minInput.placeholder = '不限';
+    minBox.append(minLabel, minInput);
+
+    const maxBox = document.createElement('div');
+    const maxLabel = document.createElement('label');
+    maxLabel.textContent = '最大值';
+    const maxInput = document.createElement('input');
+    maxInput.type = 'number'; maxInput.step = 'any'; maxInput.value = maxValue;
+    maxInput.placeholder = '不限';
+    maxBox.append(maxLabel, maxInput);
+
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'danger remove'; remove.textContent = '删除';
+    remove.addEventListener('click', () => row.remove());
+
+    row.append(factorBox, minBox, maxBox, remove);
+    document.getElementById('factorRows').appendChild(row);
+    updateHelp();
+  }
+
+  function resetDefaultFactors() {
+    const container = document.getElementById('factorRows');
+    container.innerHTML = '';
+    if (factorInfo('turnover_rate')) addFactorRow('turnover_rate', 5, 15);
+    if (factorInfo('popularity_rank')) addFactorRow('popularity_rank', 1, 30);
+  }
+
   function analysisPayload() {
+    const rows = [...document.querySelectorAll('.factor-row')];
+    const filters = rows.map(row => {
+      const factorId = row.querySelector('select').value;
+      const inputs = row.querySelectorAll('input');
+      const minRaw = inputs[0].value.trim();
+      const maxRaw = inputs[1].value.trim();
+      if (!minRaw && !maxRaw) throw new Error(`${factorInfo(factorId)?.label || factorId} 至少填写一个边界`);
+      return {
+        factor_id: factorId,
+        min_value: minRaw ? Number(minRaw) : null,
+        max_value: maxRaw ? Number(maxRaw) : null,
+      };
+    });
+    const ids = filters.map(item => item.factor_id);
+    if (new Set(ids).size !== ids.length) throw new Error('同一个因子不能重复添加');
     return {
       start_date: document.getElementById('startDate').value,
       end_date: document.getElementById('endDate').value,
-      turnover_min: Number(document.getElementById('turnoverMin').value),
-      turnover_max: Number(document.getElementById('turnoverMax').value),
-      popularity_rank_min: Number(document.getElementById('rankMin').value),
-      popularity_rank_max: Number(document.getElementById('rankMax').value),
-      horizons: [1,3,5,10,20]
+      filters,
+      horizons,
     };
+  }
+
+  async function loadFactors() {
+    const res = await fetch('/api/research/factors');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '读取因子目录失败');
+    factorCatalog = data;
+    resetDefaultFactors();
   }
 
   async function refreshHealth() {
@@ -205,35 +330,51 @@
 
   async function analyze() {
     const status = document.getElementById('analysisStatus'); status.textContent = '统计中…';
-    const payload = analysisPayload();
     try {
-      const res = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-      const data = await res.json(); if (!res.ok) throw new Error(data.detail?.[0]?.msg || data.detail || '统计失败');
+      const payload = analysisPayload();
+      const res = await fetch('/api/research/event-study', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail?.[0]?.msg || data.detail || '统计失败');
       document.getElementById('eventCount').textContent = data.event_count.toLocaleString();
-      document.getElementById('resultBody').innerHTML = data.stats.map(x => `<tr><td>${x.horizon} 日</td><td>${x.sample_count}</td><td>${fmt(x.coverage_rate)}</td><td>${fmt(x.positive_rate)}</td><td>${fmt(x.average_return)}</td><td>${fmt(x.median_return)}</td><td>${fmt(x.return_stddev)}</td></tr>`).join('');
+      document.getElementById('resultBody').innerHTML = data.stats.map(x => `<tr><td>${x.horizon} 日</td><td>${x.sample_count}</td><td>${fmtPct(x.coverage_rate)}</td><td>${fmtPct(x.positive_rate)}</td><td>${fmtPct(x.average_return)}</td><td>${fmtPct(x.median_return)}</td><td>${fmtPct(x.return_stddev)}</td></tr>`).join('');
       status.textContent = `完成：找到 ${data.event_count} 个历史事件`;
       lastAnalysisPayload = payload;
       document.getElementById('sampleButton').disabled = false;
-      document.getElementById('sampleBody').innerHTML = '<tr><td colspan="10" class="muted">点击上方按钮查看本次条件的样本</td></tr>';
+      document.getElementById('sampleBody').innerHTML = '<tr><td class="muted">点击上方按钮查看本次条件的样本</td></tr>';
+      renderSampleHeader(payload);
     } catch (e) { status.textContent = e.message; }
+  }
+
+  function renderSampleHeader(payload) {
+    const factorHeaders = payload.filters.map(item => `<th>${escapeHtml(factorInfo(item.factor_id)?.label || item.factor_id)}</th>`).join('');
+    const returnHeaders = horizons.map(h => `<th>${h}日</th>`).join('');
+    document.getElementById('sampleHead').innerHTML = `<tr><th>日期</th><th>股票</th>${factorHeaders}<th>事件收盘价</th>${returnHeaders}</tr>`;
   }
 
   async function loadSamples() {
     if (!lastAnalysisPayload) return;
     const status = document.getElementById('sampleStatus'); status.textContent = '读取样本中…';
     try {
-      const res = await fetch('/api/analyze/samples?limit=100&offset=0', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(lastAnalysisPayload) });
+      const res = await fetch('/api/research/event-study/samples?limit=100&offset=0', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(lastAnalysisPayload) });
       const data = await res.json(); if (!res.ok) throw new Error(data.detail || '读取样本失败');
-      const cell = (returns, key) => fmt(returns[key]);
+      const factorIds = lastAnalysisPayload.filters.map(item => item.factor_id);
+      const factorCells = sample => factorIds.map(id => `<td>${escapeHtml(formatFactor(sample.factors[id], id))}</td>`).join('');
+      const returnCells = sample => horizons.map(h => `<td>${fmtPct(sample.forward_returns[`${h}d`])}</td>`).join('');
+      const colspan = 3 + factorIds.length + horizons.length;
       document.getElementById('sampleBody').innerHTML = data.samples.length
-        ? data.samples.map(x => `<tr><td>${x.trade_date}</td><td>${x.symbol}</td><td>${fmt(x.turnover_rate)}</td><td>${x.popularity_rank}</td><td>${price(x.close)}</td><td>${cell(x.forward_returns,'1d')}</td><td>${cell(x.forward_returns,'3d')}</td><td>${cell(x.forward_returns,'5d')}</td><td>${cell(x.forward_returns,'10d')}</td><td>${cell(x.forward_returns,'20d')}</td></tr>`).join('')
-        : '<tr><td colspan="10" class="muted">没有符合条件的样本</td></tr>';
+        ? data.samples.map(x => `<tr><td>${escapeHtml(x.trade_date)}</td><td>${escapeHtml(x.symbol)}</td>${factorCells(x)}<td>${price(x.close)}</td>${returnCells(x)}</tr>`).join('')
+        : `<tr><td colspan="${colspan}" class="muted">没有符合条件的样本</td></tr>`;
       status.textContent = `共 ${data.total_count} 条，当前显示 ${data.samples.length} 条`;
     } catch (e) { status.textContent = e.message; }
   }
 
-  refreshHealth();
-  refreshStats();
+  async function initialize() {
+    try { await loadFactors(); }
+    catch (e) { document.getElementById('analysisStatus').textContent = e.message; }
+    await Promise.all([refreshHealth(), refreshStats()]);
+  }
+
+  initialize();
 </script>
 </body>
 </html>
