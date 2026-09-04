@@ -8,7 +8,7 @@ from app.repository import MarketRepository
 from app.services.event_study import EventStudyEngine
 
 
-def test_event_study_filters_and_forward_returns(tmp_path):
+def test_event_study_filters_forward_returns_and_coverage(tmp_path):
     db = Database(tmp_path / "test.duckdb")
     db.initialize()
     repo = MarketRepository(db)
@@ -39,19 +39,29 @@ def test_event_study_filters_and_forward_returns(tmp_path):
             turnover_max=10,
             popularity_rank_min=1,
             popularity_rank_max=20,
-            horizons=[1, 3],
+            horizons=[1, 3, 4],
         )
     )
 
     assert result.event_count == 2
+
     one_day = result.stats[0]
     assert one_day.horizon == 1
     assert one_day.sample_count == 2
+    assert one_day.coverage_rate == pytest.approx(100.0)
     assert one_day.positive_rate == pytest.approx(50.0)
     assert one_day.average_return == pytest.approx(-4.090909, abs=1e-5)
 
     three_day = result.stats[1]
     assert three_day.horizon == 3
     assert three_day.sample_count == 2
+    assert three_day.coverage_rate == pytest.approx(100.0)
     assert three_day.positive_rate == pytest.approx(100.0)
     assert three_day.average_return == pytest.approx(19.090909, abs=1e-5)
+
+    four_day = result.stats[2]
+    assert four_day.horizon == 4
+    assert four_day.sample_count == 1
+    assert four_day.coverage_rate == pytest.approx(50.0)
+    assert four_day.positive_rate == pytest.approx(100.0)
+    assert four_day.average_return == pytest.approx(30.0)

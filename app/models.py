@@ -46,6 +46,7 @@ class HistoricalSyncRequest(BaseModel):
 class HorizonStat(BaseModel):
     horizon: int
     sample_count: int
+    coverage_rate: float | None
     positive_rate: float | None
     average_return: float | None
     median_return: float | None
@@ -60,6 +61,7 @@ class EventStudyResult(BaseModel):
 class HistoricalSyncResult(BaseModel):
     start_date: date
     end_date: date
+    bar_end_date: date
     popularity_rows: int
     bar_rows: int
     unique_symbols: int

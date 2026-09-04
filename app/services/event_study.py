@@ -105,6 +105,7 @@ class EventStudyEngine:
             HorizonStat(
                 horizon=int(row[0]),
                 sample_count=int(row[1]),
+                coverage_rate=(100.0 * int(row[1]) / event_count) if event_count else None,
                 positive_rate=_float_or_none(row[2]),
                 average_return=_float_or_none(row[3]),
                 median_return=_float_or_none(row[4]),

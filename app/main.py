@@ -126,6 +126,7 @@ def sync_historical(request: HistoricalSyncRequest) -> HistoricalSyncResult:
     return HistoricalSyncResult(
         start_date=summary.start_date,
         end_date=summary.end_date,
+        bar_end_date=summary.bar_end_date,
         popularity_rows=summary.popularity_rows,
         bar_rows=summary.bar_rows,
         unique_symbols=summary.unique_symbols,

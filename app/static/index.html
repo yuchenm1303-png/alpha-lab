@@ -91,8 +91,8 @@
       <div class="metric"><span class="muted">人气记录条数</span><strong id="popCount">—</strong></div>
     </div>
     <table>
-      <thead><tr><th>未来交易日</th><th>有效样本</th><th>红盘率</th><th>平均涨幅</th><th>中位涨幅</th><th>波动</th></tr></thead>
-      <tbody id="resultBody"><tr><td colspan="6" class="muted">准备数据后开始统计</td></tr></tbody>
+      <thead><tr><th>未来交易日</th><th>有效样本</th><th>覆盖率</th><th>红盘率</th><th>平均涨幅</th><th>中位涨幅</th><th>波动</th></tr></thead>
+      <tbody id="resultBody"><tr><td colspan="7" class="muted">准备数据后开始统计</td></tr></tbody>
     </table>
   </section>
 </main>
@@ -137,7 +137,7 @@
       const res = await fetch('/api/sync/historical', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '同步失败');
-      status.textContent = `完成：${data.unique_symbols} 只股票，${data.bar_rows} 条行情，${data.popularity_rows} 条人气记录`;
+      status.textContent = `完成：${data.unique_symbols} 只股票，${data.bar_rows} 条行情，${data.popularity_rows} 条人气记录；未来行情拉至 ${data.bar_end_date}`;
       await refreshStats();
       document.getElementById('startDate').value = payload.start_date;
       document.getElementById('endDate').value = payload.end_date;
@@ -178,7 +178,7 @@
       const res = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       const data = await res.json(); if (!res.ok) throw new Error(data.detail?.[0]?.msg || data.detail || '统计失败');
       document.getElementById('eventCount').textContent = data.event_count.toLocaleString();
-      document.getElementById('resultBody').innerHTML = data.stats.map(x => `<tr><td>${x.horizon} 日</td><td>${x.sample_count}</td><td>${fmt(x.positive_rate)}</td><td>${fmt(x.average_return)}</td><td>${fmt(x.median_return)}</td><td>${fmt(x.return_stddev)}</td></tr>`).join('');
+      document.getElementById('resultBody').innerHTML = data.stats.map(x => `<tr><td>${x.horizon} 日</td><td>${x.sample_count}</td><td>${fmt(x.coverage_rate)}</td><td>${fmt(x.positive_rate)}</td><td>${fmt(x.average_return)}</td><td>${fmt(x.median_return)}</td><td>${fmt(x.return_stddev)}</td></tr>`).join('');
       status.textContent = `完成：找到 ${data.event_count} 个历史事件`;
     } catch (e) { status.textContent = e.message; }
   }
