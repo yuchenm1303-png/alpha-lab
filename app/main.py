@@ -14,20 +14,26 @@ from app.models import (
     EventSamplePage,
     EventStudyRequest,
     EventStudyResult,
+    FactorInfo,
     HistoricalSyncRequest,
     HistoricalSyncResult,
     ImportResult,
+    ResearchEventSamplePage,
+    ResearchEventStudyRequest,
 )
 from app.repository import MarketRepository
+from app.research.factors import list_factor_specs
 from app.services.csv_import import parse_bars_csv, parse_popularity_csv
 from app.services.event_study import EventStudyEngine
+from app.services.research import ResearchEventStudyEngine
 
 
 database = Database()
 repository = MarketRepository(database)
 engine = EventStudyEngine(database)
+research_engine = ResearchEventStudyEngine(database)
 
-app = FastAPI(title="Alpha Lab", version="0.4.0")
+app = FastAPI(title="Alpha Lab", version="0.5.0")
 
 
 def require_write_access(
@@ -97,6 +103,21 @@ def data_stats() -> DataStats:
     return DataStats(**repository.stats())
 
 
+@app.get("/api/research/factors", response_model=list[FactorInfo])
+def research_factors() -> list[FactorInfo]:
+    return [
+        FactorInfo(
+            id=spec.id,
+            label=spec.label,
+            group=spec.group,
+            unit=spec.unit,
+            storage=spec.storage,
+            description=spec.description,
+        )
+        for spec in list_factor_specs()
+    ]
+
+
 @app.post("/api/import/bars", response_model=ImportResult, dependencies=[Depends(require_write_access)])
 async def import_bars(file: UploadFile = File(...)) -> ImportResult:
     try:
@@ -156,6 +177,26 @@ def analyze_samples(
     offset: int = Query(default=0, ge=0),
 ) -> EventSamplePage:
     return engine.samples(request, limit=limit, offset=offset)
+
+
+@app.post("/api/research/event-study", response_model=EventStudyResult)
+def research_event_study(request: ResearchEventStudyRequest) -> EventStudyResult:
+    try:
+        return research_engine.run(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/research/event-study/samples", response_model=ResearchEventSamplePage)
+def research_event_samples(
+    request: ResearchEventStudyRequest,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> ResearchEventSamplePage:
+    try:
+        return research_engine.samples(request, limit=limit, offset=offset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 STATIC_DIR = Path(__file__).parent / "static"

@@ -5,6 +5,15 @@ from datetime import date
 from pydantic import BaseModel, Field, model_validator
 
 
+def _validate_horizons(horizons: list[int]) -> list[int]:
+    normalized = sorted(set(horizons))
+    if not normalized:
+        raise ValueError("at least one horizon is required")
+    if any(h < 1 or h > 60 for h in normalized):
+        raise ValueError("horizons must be between 1 and 60 trading days")
+    return normalized
+
+
 class EventStudyRequest(BaseModel):
     start_date: date
     end_date: date
@@ -22,12 +31,42 @@ class EventStudyRequest(BaseModel):
             raise ValueError("turnover_min must be <= turnover_max")
         if self.popularity_rank_min > self.popularity_rank_max:
             raise ValueError("popularity_rank_min must be <= popularity_rank_max")
-        normalized = sorted(set(self.horizons))
-        if not normalized:
-            raise ValueError("at least one horizon is required")
-        if any(h < 1 or h > 60 for h in normalized):
-            raise ValueError("horizons must be between 1 and 60 trading days")
-        self.horizons = normalized
+        self.horizons = _validate_horizons(self.horizons)
+        return self
+
+
+class FactorFilter(BaseModel):
+    factor_id: str = Field(min_length=1, max_length=64)
+    min_value: float | None = None
+    max_value: float | None = None
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "FactorFilter":
+        if self.min_value is None and self.max_value is None:
+            raise ValueError("factor filter requires min_value and/or max_value")
+        if (
+            self.min_value is not None
+            and self.max_value is not None
+            and self.min_value > self.max_value
+        ):
+            raise ValueError("factor filter min_value must be <= max_value")
+        return self
+
+
+class ResearchEventStudyRequest(BaseModel):
+    start_date: date
+    end_date: date
+    filters: list[FactorFilter] = Field(default_factory=list, max_length=16)
+    horizons: list[int] = Field(default_factory=lambda: [1, 3, 5, 10, 20])
+
+    @model_validator(mode="after")
+    def validate_request(self) -> "ResearchEventStudyRequest":
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be on or before end_date")
+        factor_ids = [item.factor_id for item in self.filters]
+        if len(factor_ids) != len(set(factor_ids)):
+            raise ValueError("duplicate factor filters are not allowed")
+        self.horizons = _validate_horizons(self.horizons)
         return self
 
 
@@ -72,6 +111,30 @@ class EventSamplePage(BaseModel):
     limit: int
     offset: int
     samples: list[EventSample]
+
+
+class ResearchEventSample(BaseModel):
+    symbol: str
+    trade_date: date
+    close: float
+    factors: dict[str, float | None]
+    forward_returns: dict[str, float | None]
+
+
+class ResearchEventSamplePage(BaseModel):
+    total_count: int
+    limit: int
+    offset: int
+    samples: list[ResearchEventSample]
+
+
+class FactorInfo(BaseModel):
+    id: str
+    label: str
+    group: str
+    unit: str
+    storage: str
+    description: str
 
 
 class HistoricalSyncResult(BaseModel):

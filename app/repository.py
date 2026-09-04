@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 
 from app.db import Database
 
 
 BarRow = tuple[str, str, float, float, float, float, float]
 PopularityRow = tuple[str, str, int, float | None]
+FactorRow = tuple[str, str, str, float, str | None]
 
 
 class MarketRepository:
@@ -27,6 +28,20 @@ class MarketRepository:
             )
         return len(rows)
 
+    def upsert_factor_values(self, rows: Sequence[FactorRow]) -> int:
+        if not rows:
+            return 0
+        with self.database.connect() as conn:
+            conn.executemany(
+                """
+                INSERT OR REPLACE INTO factor_values
+                (symbol, trade_date, factor_id, value, source, updated_at)
+                VALUES (?, CAST(? AS DATE), ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                rows,
+            )
+        return len(rows)
+
     def upsert_popularity(self, rows: Sequence[PopularityRow]) -> int:
         if not rows:
             return 0
@@ -38,6 +53,23 @@ class MarketRepository:
                 VALUES (?, CAST(? AS DATE), ?, ?)
                 """,
                 rows,
+            )
+            factor_rows: list[FactorRow] = []
+            for symbol, trade_date, rank, score in rows:
+                factor_rows.append(
+                    (symbol, trade_date, "popularity_rank", float(rank), "popularity")
+                )
+                if score is not None:
+                    factor_rows.append(
+                        (symbol, trade_date, "popularity_score", float(score), "popularity")
+                    )
+            conn.executemany(
+                """
+                INSERT OR REPLACE INTO factor_values
+                (symbol, trade_date, factor_id, value, source, updated_at)
+                VALUES (?, CAST(? AS DATE), ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                factor_rows,
             )
         return len(rows)
 

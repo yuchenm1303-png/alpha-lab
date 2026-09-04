@@ -45,8 +45,46 @@ class Database:
                 """
             )
             conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS factor_values (
+                    symbol VARCHAR NOT NULL,
+                    trade_date DATE NOT NULL,
+                    factor_id VARCHAR NOT NULL,
+                    value DOUBLE NOT NULL,
+                    source VARCHAR,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (symbol, trade_date, factor_id)
+                )
+                """
+            )
+            conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_daily_bars_date ON daily_bars(trade_date)"
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_popularity_date ON popularity(trade_date)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_factor_values_factor_date "
+                "ON factor_values(factor_id, trade_date)"
+            )
+            # Backward-compatible migration: existing popularity rows become
+            # first-class time-series factors without deleting the legacy table.
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO factor_values
+                    (symbol, trade_date, factor_id, value, source, updated_at)
+                SELECT symbol, trade_date, 'popularity_rank', CAST(popularity_rank AS DOUBLE),
+                       'legacy_popularity', CURRENT_TIMESTAMP
+                FROM popularity
+                """
+            )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO factor_values
+                    (symbol, trade_date, factor_id, value, source, updated_at)
+                SELECT symbol, trade_date, 'popularity_score', popularity_score,
+                       'legacy_popularity', CURRENT_TIMESTAMP
+                FROM popularity
+                WHERE popularity_score IS NOT NULL
+                """
             )
