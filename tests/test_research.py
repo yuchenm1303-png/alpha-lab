@@ -30,10 +30,18 @@ def _seed(repo: MarketRepository) -> None:
     )
 
 
-def test_factor_registry_exposes_first_class_popularity_factor():
+def test_factor_registry_exposes_first_class_popularity_and_derived_factors():
     ids = {spec.id for spec in list_factor_specs()}
-    assert {"turnover_rate", "popularity_rank", "popularity_score"} <= ids
+    assert {
+        "turnover_rate",
+        "change_pct",
+        "amplitude",
+        "intraday_return",
+        "popularity_rank",
+        "popularity_score",
+    } <= ids
     assert get_factor_spec("popularity_rank").storage == "timeseries"
+    assert get_factor_spec("change_pct").storage == "derived"
     with pytest.raises(ValueError, match="unsupported factor"):
         get_factor_spec("future_magic")
 
@@ -82,6 +90,31 @@ def test_generic_event_study_filters_bar_and_timeseries_factors(tmp_path):
     assert page.total_count == 2
     assert page.samples[0].factors["turnover_rate"] == pytest.approx(8.0)
     assert page.samples[0].factors["popularity_score"] == pytest.approx(8500.0)
+
+
+def test_generic_event_study_can_filter_derived_daily_change(tmp_path):
+    db = Database(tmp_path / "derived.duckdb")
+    db.initialize()
+    repo = MarketRepository(db)
+    _seed(repo)
+    request = ResearchEventStudyRequest(
+        start_date=date(2026, 1, 5),
+        end_date=date(2026, 1, 9),
+        filters=[
+            FactorFilter(factor_id="turnover_rate", min_value=5, max_value=10),
+            FactorFilter(factor_id="change_pct", min_value=9, max_value=11),
+        ],
+        horizons=[1],
+    )
+
+    engine = ResearchEventStudyEngine(db)
+    result = engine.run(request)
+    page = engine.samples(request, limit=10)
+
+    assert result.event_count == 1
+    assert page.samples[0].trade_date == date(2026, 1, 6)
+    assert page.samples[0].factors["change_pct"] == pytest.approx(10.0)
+    assert page.samples[0].forward_returns["1d"] == pytest.approx(-18.181818, abs=1e-5)
 
 
 def test_generic_event_study_rejects_unregistered_factor(tmp_path):

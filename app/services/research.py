@@ -21,6 +21,23 @@ class _PreparedFactor:
     join_alias: str | None
 
 
+_DERIVED_FACTOR_EXPRESSIONS = {
+    "change_pct": (
+        "CASE WHEN LAG(b.close) OVER (PARTITION BY b.symbol ORDER BY b.trade_date) IS NULL "
+        "OR LAG(b.close) OVER (PARTITION BY b.symbol ORDER BY b.trade_date) = 0 THEN NULL "
+        "ELSE (b.close / LAG(b.close) OVER (PARTITION BY b.symbol ORDER BY b.trade_date) - 1.0) * 100.0 END"
+    ),
+    "amplitude": (
+        "CASE WHEN LAG(b.close) OVER (PARTITION BY b.symbol ORDER BY b.trade_date) IS NULL "
+        "OR LAG(b.close) OVER (PARTITION BY b.symbol ORDER BY b.trade_date) = 0 THEN NULL "
+        "ELSE (b.high - b.low) / LAG(b.close) OVER (PARTITION BY b.symbol ORDER BY b.trade_date) * 100.0 END"
+    ),
+    "intraday_return": (
+        "CASE WHEN b.open = 0 THEN NULL ELSE (b.close / b.open - 1.0) * 100.0 END"
+    ),
+}
+
+
 class ResearchEventStudyEngine:
     """Generic point-in-time factor filters followed by forward-return statistics."""
 
@@ -66,6 +83,12 @@ class ResearchEventStudyEngine:
                 if not factor.spec.column:
                     raise ValueError(f"bar factor {factor.factor_id} has no source column")
                 selects.append(f"b.{factor.spec.column} AS {factor.column_alias}")
+                continue
+            if factor.spec.storage == "derived":
+                expression = _DERIVED_FACTOR_EXPRESSIONS.get(factor.factor_id)
+                if expression is None:
+                    raise ValueError(f"derived factor {factor.factor_id} has no expression")
+                selects.append(f"{expression} AS {factor.column_alias}")
                 continue
             assert factor.join_alias is not None
             safe_factor_id = factor.spec.id.replace("'", "''")

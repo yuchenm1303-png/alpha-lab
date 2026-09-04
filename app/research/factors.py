@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-FactorStorage = Literal["bar", "timeseries"]
+FactorStorage = Literal["bar", "timeseries", "derived"]
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,30 @@ _FACTOR_SPECS = (
         storage="bar",
         column="turnover_rate",
         description="历史交易日换手率，数值 8.5 表示 8.5%。",
+    ),
+    FactorSpec(
+        id="change_pct",
+        label="当日涨幅",
+        group="价格",
+        unit="percent",
+        storage="derived",
+        description="当日收盘价相对上一有效交易日收盘价的涨跌幅。",
+    ),
+    FactorSpec(
+        id="amplitude",
+        label="当日振幅",
+        group="价格",
+        unit="percent",
+        storage="derived",
+        description="(当日最高价 - 最低价) / 上一有效交易日收盘价。",
+    ),
+    FactorSpec(
+        id="intraday_return",
+        label="日内涨幅",
+        group="价格",
+        unit="percent",
+        storage="derived",
+        description="当日收盘价相对当日开盘价的涨跌幅。",
     ),
     FactorSpec(
         id="popularity_rank",
