@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -25,7 +26,20 @@ database = Database()
 repository = MarketRepository(database)
 engine = EventStudyEngine(database)
 
-app = FastAPI(title="Alpha Lab", version="0.2.0")
+app = FastAPI(title="Alpha Lab", version="0.3.0")
+
+
+def require_write_access(
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+) -> None:
+    expected = os.getenv("ALPHALAB_ADMIN_TOKEN")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Write operations are disabled until ALPHALAB_ADMIN_TOKEN is configured.",
+        )
+    if x_admin_token is None or not secrets.compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid admin token.")
 
 
 @app.on_event("startup")
@@ -66,12 +80,15 @@ def _seed_demo_data_if_empty() -> None:
 @app.get("/api/health")
 def health() -> dict[str, str | bool]:
     is_vercel = bool(os.getenv("VERCEL"))
+    hithink_configured = bool(os.getenv("HITHINK_API_KEY"))
+    write_auth_configured = bool(os.getenv("ALPHALAB_ADMIN_TOKEN"))
     return {
         "status": "ok",
         "runtime": "vercel" if is_vercel else "local",
         "persistent_storage": not is_vercel,
-        "real_sync_configured": bool(os.getenv("HITHINK_API_KEY")),
-        "real_sync_enabled": (not is_vercel) and bool(os.getenv("HITHINK_API_KEY")),
+        "write_auth_configured": write_auth_configured,
+        "real_sync_configured": hithink_configured,
+        "real_sync_enabled": (not is_vercel) and hithink_configured and write_auth_configured,
     }
 
 
@@ -80,7 +97,11 @@ def data_stats() -> DataStats:
     return DataStats(**repository.stats())
 
 
-@app.post("/api/import/bars", response_model=ImportResult)
+@app.post(
+    "/api/import/bars",
+    response_model=ImportResult,
+    dependencies=[Depends(require_write_access)],
+)
 async def import_bars(file: UploadFile = File(...)) -> ImportResult:
     try:
         rows = parse_bars_csv(await file.read())
@@ -89,7 +110,11 @@ async def import_bars(file: UploadFile = File(...)) -> ImportResult:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/import/popularity", response_model=ImportResult)
+@app.post(
+    "/api/import/popularity",
+    response_model=ImportResult,
+    dependencies=[Depends(require_write_access)],
+)
 async def import_popularity(file: UploadFile = File(...)) -> ImportResult:
     try:
         rows = parse_popularity_csv(await file.read())
@@ -98,7 +123,11 @@ async def import_popularity(file: UploadFile = File(...)) -> ImportResult:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/sync/historical", response_model=HistoricalSyncResult)
+@app.post(
+    "/api/sync/historical",
+    response_model=HistoricalSyncResult,
+    dependencies=[Depends(require_write_access)],
+)
 def sync_historical(request: HistoricalSyncRequest) -> HistoricalSyncResult:
     if os.getenv("VERCEL"):
         raise HTTPException(

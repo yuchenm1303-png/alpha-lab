@@ -35,6 +35,12 @@
   <p class="muted">历史条件事件统计：换手率 × 人气排名 → 后续收益表现</p>
   <div id="runtimeNotice" class="notice">正在检查数据运行环境…</div>
 
+  <section class="card" style="margin-bottom:16px">
+    <h3>管理写操作</h3>
+    <p class="muted">同步和 CSV 导入需要管理令牌。令牌只保留在当前页面内存，不写入浏览器存储。</p>
+    <label>管理令牌</label><input id="adminToken" type="password" autocomplete="off" placeholder="ALPHALAB_ADMIN_TOKEN" />
+  </section>
+
   <div class="grid">
     <section class="card">
       <h3>同步真实数据</h3>
@@ -107,6 +113,10 @@
   document.getElementById('syncEnd').value = iso(today);
   document.getElementById('syncStart').value = iso(monthAgo);
 
+  function writeHeaders() {
+    return { 'X-Admin-Token': document.getElementById('adminToken').value };
+  }
+
   async function refreshHealth() {
     const res = await fetch('/api/health'); const data = await res.json();
     const notice = document.getElementById('runtimeNotice');
@@ -115,13 +125,17 @@
       notice.className = 'notice';
       notice.textContent = '当前是 Vercel 演示环境：数据库为临时存储，真实数据同步已禁用；页面统计功能可用。';
       button.disabled = true;
+    } else if (!data.write_auth_configured) {
+      notice.className = 'notice';
+      notice.textContent = '当前是持久环境，但服务器还未配置 ALPHALAB_ADMIN_TOKEN；所有写操作已禁用。';
+      button.disabled = true;
     } else if (!data.real_sync_configured) {
       notice.className = 'notice';
-      notice.textContent = '当前是持久环境，但还未配置 HITHINK_API_KEY；配置后即可直接同步真实数据。';
+      notice.textContent = '写操作保护已启用，但还未配置 HITHINK_API_KEY；CSV 导入可用，真实同步暂不可用。';
       button.disabled = true;
     } else {
       notice.className = 'notice ok';
-      notice.textContent = '真实数据同步已就绪：HiThink 人气排名 + BaoStock 换手率/前复权行情。';
+      notice.textContent = '真实数据同步已就绪：写操作受管理令牌保护。';
       button.disabled = false;
     }
   }
@@ -134,7 +148,7 @@
       max_rank: Number(document.getElementById('syncRank').value)
     };
     try {
-      const res = await fetch('/api/sync/historical', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      const res = await fetch('/api/sync/historical', { method:'POST', headers:{'Content-Type':'application/json', ...writeHeaders()}, body:JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '同步失败');
       status.textContent = `完成：${data.unique_symbols} 只股票，${data.bar_rows} 条行情，${data.popularity_rows} 条人气记录；未来行情拉至 ${data.bar_end_date}`;
@@ -150,7 +164,7 @@
     const form = new FormData(); form.append('file', input.files[0]);
     status.textContent = '导入中…';
     try {
-      const res = await fetch(url, { method: 'POST', body: form }); const data = await res.json();
+      const res = await fetch(url, { method: 'POST', headers: writeHeaders(), body: form }); const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '导入失败');
       status.textContent = `已导入 ${data.imported_rows} 条记录`;
       await refreshStats();
