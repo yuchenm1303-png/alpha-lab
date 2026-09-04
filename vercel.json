@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "alias": ["alpha.smirel.com"],
   "functions": {
     "app/main.py": {
       "maxDuration": 60
