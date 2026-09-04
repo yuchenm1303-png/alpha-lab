@@ -8,7 +8,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.db import Database
-from app.models import DataStats, EventStudyRequest, EventStudyResult, ImportResult
+from app.models import (
+    DataStats,
+    EventStudyRequest,
+    EventStudyResult,
+    HistoricalSyncRequest,
+    HistoricalSyncResult,
+    ImportResult,
+)
 from app.repository import MarketRepository
 from app.services.csv_import import parse_bars_csv, parse_popularity_csv
 from app.services.event_study import EventStudyEngine
@@ -18,7 +25,7 @@ database = Database()
 repository = MarketRepository(database)
 engine = EventStudyEngine(database)
 
-app = FastAPI(title="Alpha Lab", version="0.1.0")
+app = FastAPI(title="Alpha Lab", version="0.2.0")
 
 
 @app.on_event("startup")
@@ -58,10 +65,13 @@ def _seed_demo_data_if_empty() -> None:
 
 @app.get("/api/health")
 def health() -> dict[str, str | bool]:
+    is_vercel = bool(os.getenv("VERCEL"))
     return {
         "status": "ok",
-        "runtime": "vercel" if os.getenv("VERCEL") else "local",
-        "persistent_storage": not bool(os.getenv("VERCEL")),
+        "runtime": "vercel" if is_vercel else "local",
+        "persistent_storage": not is_vercel,
+        "real_sync_configured": bool(os.getenv("HITHINK_API_KEY")),
+        "real_sync_enabled": (not is_vercel) and bool(os.getenv("HITHINK_API_KEY")),
     }
 
 
@@ -86,6 +96,41 @@ async def import_popularity(file: UploadFile = File(...)) -> ImportResult:
         return ImportResult(imported_rows=repository.upsert_popularity(rows))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/sync/historical", response_model=HistoricalSyncResult)
+def sync_historical(request: HistoricalSyncRequest) -> HistoricalSyncResult:
+    if os.getenv("VERCEL"):
+        raise HTTPException(
+            status_code=409,
+            detail="Real-data sync is disabled on ephemeral Vercel storage; deploy to persistent storage first.",
+        )
+
+    from app.providers.baostock import BaoStockClient, BaoStockError
+    from app.providers.hithink import HiThinkClient, HiThinkError
+    from app.services.sync import HistoricalSignalSyncService
+
+    try:
+        summary = HistoricalSignalSyncService(
+            HiThinkClient(),
+            BaoStockClient(),
+            repository,
+        ).sync(
+            request.start_date,
+            request.end_date,
+            max_rank=request.max_rank,
+        )
+    except (HiThinkError, BaoStockError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return HistoricalSyncResult(
+        start_date=summary.start_date,
+        end_date=summary.end_date,
+        popularity_rows=summary.popularity_rows,
+        bar_rows=summary.bar_rows,
+        unique_symbols=summary.unique_symbols,
+        unsupported_symbols=list(summary.unsupported_symbols),
+    )
 
 
 @app.post("/api/analyze", response_model=EventStudyResult)

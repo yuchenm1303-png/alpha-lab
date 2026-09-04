@@ -31,6 +31,18 @@ class EventStudyRequest(BaseModel):
         return self
 
 
+class HistoricalSyncRequest(BaseModel):
+    start_date: date
+    end_date: date
+    max_rank: int = Field(default=100, ge=1, le=5000)
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "HistoricalSyncRequest":
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be on or before end_date")
+        return self
+
+
 class HorizonStat(BaseModel):
     horizon: int
     sample_count: int
@@ -43,6 +55,15 @@ class HorizonStat(BaseModel):
 class EventStudyResult(BaseModel):
     event_count: int
     stats: list[HorizonStat]
+
+
+class HistoricalSyncResult(BaseModel):
+    start_date: date
+    end_date: date
+    popularity_rows: int
+    bar_rows: int
+    unique_symbols: int
+    unsupported_symbols: list[str]
 
 
 class ImportResult(BaseModel):
