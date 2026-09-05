@@ -101,9 +101,23 @@ class MarketRepository:
                 "SELECT COUNT(*), MIN(trade_date), MAX(trade_date) FROM daily_bars"
             ).fetchone()
             popularity_rows = conn.execute("SELECT COUNT(*) FROM popularity").fetchone()[0]
+            market_bars, market_first, market_last = conn.execute(
+                "SELECT COUNT(*), MIN(trade_date), MAX(trade_date) FROM market_daily_raw"
+            ).fetchone()
+            adjustment_events = conn.execute(
+                "SELECT COUNT(*) FROM market_adjustment_events"
+            ).fetchone()[0]
+            research_bars = conn.execute(
+                "SELECT COUNT(*) FROM research_daily_bars"
+            ).fetchone()[0]
         return {
             "bars": int(bars),
             "popularity_rows": int(popularity_rows),
             "first_trade_date": first_date,
             "last_trade_date": last_date,
+            "market_bars": int(market_bars),
+            "research_bars": int(research_bars),
+            "adjustment_events": int(adjustment_events),
+            "market_first_trade_date": market_first,
+            "market_last_trade_date": market_last,
         }
