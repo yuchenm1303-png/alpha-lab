@@ -60,7 +60,7 @@
   <div class="grid">
     <section class="card">
       <h3>同步真实数据</h3>
-      <p class="muted">HiThink 历史人气 + BaoStock 前复权行情/换手率</p>
+      <p class="muted">HiThink 历史人气/涨停池 + BaoStock 前复权行情、换手率、成交量/额、ST/上市日期</p>
       <label>同步开始日期</label><input id="syncStart" type="date" />
       <label>同步结束日期</label><input id="syncEnd" type="date" />
       <label>只拉取人气 Top N</label><input id="syncRank" type="number" value="100" min="1" />
@@ -70,7 +70,7 @@
 
     <section class="card">
       <h3>手工导入日线</h3>
-      <p class="muted">CSV：symbol, trade_date, open, high, low, close, turnover_rate</p>
+      <p class="muted">必填：symbol, trade_date, open, high, low, close, turnover_rate；可选：volume, amount, is_st, ipo_date</p>
       <input id="barsFile" type="file" accept=".csv" />
       <button class="secondary" onclick="upload('/api/import/bars','barsFile','barsStatus')">导入日线</button>
       <div id="barsStatus" class="status"></div>
@@ -88,12 +88,8 @@
   <section class="card" style="margin-top:16px">
     <h3>历史研究条件</h3>
     <div class="grid">
-      <div>
-        <label>开始日期</label><input id="startDate" type="date" />
-      </div>
-      <div>
-        <label>结束日期</label><input id="endDate" type="date" />
-      </div>
+      <div><label>开始日期</label><input id="startDate" type="date" /></div>
+      <div><label>结束日期</label><input id="endDate" type="date" /></div>
     </div>
     <div style="margin-top:18px">
       <strong>因子条件</strong>
@@ -151,20 +147,18 @@
   document.getElementById('syncEnd').value = iso(today);
   document.getElementById('syncStart').value = iso(monthAgo);
 
-  function writeHeaders() {
-    return { 'X-Admin-Token': document.getElementById('adminToken').value };
-  }
-
-  function factorInfo(id) {
-    return factorCatalog.find(item => item.id === id);
-  }
+  function writeHeaders() { return { 'X-Admin-Token': document.getElementById('adminToken').value }; }
+  function factorInfo(id) { return factorCatalog.find(item => item.id === id); }
 
   function formatFactor(value, factorId) {
     if (value == null) return '—';
     const info = factorInfo(factorId);
-    if (info?.unit === 'percent') return fmtPct(value);
+    if (info?.unit === '%') return fmtPct(value);
     if (info?.unit === 'rank') return String(Math.round(Number(value)));
-    return Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+    const number = Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+    return info?.unit && !['0/1', '倍', 'score', '股', '元', '亿元', '天'].includes(info.unit)
+      ? number
+      : `${number}${info?.unit === '0/1' || info?.unit === 'score' ? '' : info?.unit || ''}`;
   }
 
   function selectedFactorIds() {
@@ -180,13 +174,11 @@
     if (!factorCatalog.length) return;
     const id = factorId || nextAvailableFactorId();
     if (!id) return;
-    const info = factorInfo(id) || factorCatalog[0];
     const row = document.createElement('div');
     row.className = 'factor-row';
 
     const factorBox = document.createElement('div');
-    const factorLabel = document.createElement('label');
-    factorLabel.textContent = '因子';
+    const factorLabel = document.createElement('label'); factorLabel.textContent = '因子';
     const select = document.createElement('select');
     for (const factor of factorCatalog) {
       const option = document.createElement('option');
@@ -195,43 +187,33 @@
       if (factor.id === id) option.selected = true;
       select.appendChild(option);
     }
-    const help = document.createElement('div');
-    help.className = 'factor-help';
-    const updateHelp = () => {
-      const current = factorInfo(select.value);
-      help.textContent = current?.description || '';
-    };
+    const help = document.createElement('div'); help.className = 'factor-help';
+    const updateHelp = () => { help.textContent = factorInfo(select.value)?.description || ''; };
     select.addEventListener('change', updateHelp);
     factorBox.append(factorLabel, select, help);
 
     const minBox = document.createElement('div');
-    const minLabel = document.createElement('label');
-    minLabel.textContent = '最小值';
+    const minLabel = document.createElement('label'); minLabel.textContent = '最小值';
     const minInput = document.createElement('input');
-    minInput.type = 'number'; minInput.step = 'any'; minInput.value = minValue;
-    minInput.placeholder = '不限';
+    minInput.type = 'number'; minInput.step = 'any'; minInput.value = minValue; minInput.placeholder = '不限';
     minBox.append(minLabel, minInput);
 
     const maxBox = document.createElement('div');
-    const maxLabel = document.createElement('label');
-    maxLabel.textContent = '最大值';
+    const maxLabel = document.createElement('label'); maxLabel.textContent = '最大值';
     const maxInput = document.createElement('input');
-    maxInput.type = 'number'; maxInput.step = 'any'; maxInput.value = maxValue;
-    maxInput.placeholder = '不限';
+    maxInput.type = 'number'; maxInput.step = 'any'; maxInput.value = maxValue; maxInput.placeholder = '不限';
     maxBox.append(maxLabel, maxInput);
 
     const remove = document.createElement('button');
     remove.type = 'button'; remove.className = 'danger remove'; remove.textContent = '删除';
     remove.addEventListener('click', () => row.remove());
-
     row.append(factorBox, minBox, maxBox, remove);
     document.getElementById('factorRows').appendChild(row);
     updateHelp();
   }
 
   function resetDefaultFactors() {
-    const container = document.getElementById('factorRows');
-    container.innerHTML = '';
+    document.getElementById('factorRows').innerHTML = '';
     if (factorInfo('turnover_rate')) addFactorRow('turnover_rate', 5, 15);
     if (factorInfo('popularity_rank')) addFactorRow('popularity_rank', 1, 30);
   }
@@ -302,7 +284,7 @@
       const res = await fetch('/api/sync/historical', { method:'POST', headers:{'Content-Type':'application/json', ...writeHeaders()}, body:JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '同步失败');
-      status.textContent = `完成：${data.unique_symbols} 只股票，${data.bar_rows} 条行情，${data.popularity_rows} 条人气记录；未来行情拉至 ${data.bar_end_date}`;
+      status.textContent = `完成：${data.unique_symbols} 只股票，${data.bar_rows} 条行情，${data.popularity_rows} 条人气记录，${data.factor_rows} 条扩展因子；行情覆盖 ${data.bar_start_date} 至 ${data.bar_end_date}`;
       await refreshStats();
       document.getElementById('startDate').value = payload.start_date;
       document.getElementById('endDate').value = payload.end_date;
