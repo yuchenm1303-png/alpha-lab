@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -82,6 +83,10 @@ class HistoricalSyncRequest(BaseModel):
         return self
 
 
+class MarketDumpSyncRequest(BaseModel):
+    mode: Literal["auto", "full", "incremental"] = "auto"
+
+
 class HorizonStat(BaseModel):
     horizon: int
     sample_count: int
@@ -149,6 +154,18 @@ class HistoricalSyncResult(BaseModel):
     unsupported_symbols: list[str]
 
 
+class MarketDumpSyncResult(BaseModel):
+    mode_requested: str
+    mode_used: str
+    daily_rows: int
+    raw_rows: int
+    adjustment_events: int
+    factor_rows: int
+    research_rows: int
+    first_trade_date: date | None
+    last_trade_date: date | None
+
+
 class ImportResult(BaseModel):
     imported_rows: int
 
@@ -158,3 +175,8 @@ class DataStats(BaseModel):
     popularity_rows: int
     first_trade_date: date | None
     last_trade_date: date | None
+    market_bars: int = 0
+    research_bars: int = 0
+    adjustment_events: int = 0
+    market_first_trade_date: date | None = None
+    market_last_trade_date: date | None = None
