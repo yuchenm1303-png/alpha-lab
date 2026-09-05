@@ -75,6 +75,52 @@ class Database:
                 )
                 """
             )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS market_daily_raw (
+                    symbol VARCHAR NOT NULL,
+                    trade_date DATE NOT NULL,
+                    open DOUBLE NOT NULL,
+                    high DOUBLE NOT NULL,
+                    low DOUBLE NOT NULL,
+                    close DOUBLE NOT NULL,
+                    volume DOUBLE,
+                    amount DOUBLE,
+                    currency VARCHAR,
+                    source VARCHAR NOT NULL DEFAULT 'hithink_market_dump',
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (symbol, trade_date)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS market_adjustment_events (
+                    symbol VARCHAR NOT NULL,
+                    ticker VARCHAR,
+                    ex_date DATE NOT NULL,
+                    dividend_per_share DOUBLE,
+                    per_share_bonus DOUBLE,
+                    allotment_ratio DOUBLE,
+                    allotment_price DOUBLE,
+                    currency VARCHAR
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS market_adjust_factors (
+                    symbol VARCHAR NOT NULL,
+                    trade_date DATE NOT NULL,
+                    forward_factor DOUBLE NOT NULL,
+                    backward_factor DOUBLE NOT NULL,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (symbol, trade_date)
+                )
+                """
+            )
+
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_daily_bars_date ON daily_bars(trade_date)"
             )
@@ -85,6 +131,15 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_factor_values_factor_date "
                 "ON factor_values(factor_id, trade_date)"
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_market_daily_raw_date "
+                "ON market_daily_raw(trade_date)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_market_adjustment_events_date "
+                "ON market_adjustment_events(ex_date)"
+            )
+
             conn.execute(
                 """
                 INSERT OR REPLACE INTO factor_values
@@ -102,5 +157,51 @@ class Database:
                        'legacy_popularity', CURRENT_TIMESTAMP
                 FROM popularity
                 WHERE popularity_score IS NOT NULL
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE OR REPLACE VIEW research_daily_bars AS
+                SELECT
+                    r.symbol,
+                    r.trade_date,
+                    r.open * f.forward_factor AS open,
+                    r.high * f.forward_factor AS high,
+                    r.low * f.forward_factor AS low,
+                    r.close * f.forward_factor AS close,
+                    d.turnover_rate,
+                    r.volume,
+                    r.amount,
+                    d.is_st,
+                    d.ipo_date
+                FROM market_daily_raw r
+                JOIN market_adjust_factors f
+                  ON f.symbol = r.symbol AND f.trade_date = r.trade_date
+                LEFT JOIN daily_bars d
+                  ON d.symbol = r.symbol AND d.trade_date = r.trade_date
+
+                UNION ALL
+
+                SELECT
+                    d.symbol,
+                    d.trade_date,
+                    d.open,
+                    d.high,
+                    d.low,
+                    d.close,
+                    d.turnover_rate,
+                    d.volume,
+                    d.amount,
+                    d.is_st,
+                    d.ipo_date
+                FROM daily_bars d
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM market_daily_raw r
+                    JOIN market_adjust_factors f
+                      ON f.symbol = r.symbol AND f.trade_date = r.trade_date
+                    WHERE r.symbol = d.symbol AND r.trade_date = d.trade_date
+                )
                 """
             )
