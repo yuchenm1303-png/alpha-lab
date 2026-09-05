@@ -27,8 +27,24 @@ def _load_baostock() -> Any:
     return bs
 
 
+def _optional_float(value: object) -> float | None:
+    raw = str(value or "").strip()
+    return float(raw) if raw else None
+
+
+def _optional_bool(value: object) -> bool | None:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return None
+    if raw in {"1", "true", "yes"}:
+        return True
+    if raw in {"0", "false", "no"}:
+        return False
+    return None
+
+
 class BaoStockClient:
-    FIELDS = "date,code,open,high,low,close,turn,tradestatus,isST"
+    FIELDS = "date,code,open,high,low,close,volume,amount,turn,tradestatus,isST"
 
     def __init__(self, module: Any | None = None, *, adjustflag: str = "2") -> None:
         self.bs = module or _load_baostock()
@@ -59,8 +75,24 @@ class BaoStockClient:
             values = result.get_row_data()
             yield dict(zip(fields, values, strict=False))
 
+    def _stock_ipo_date(self, code: str) -> str | None:
+        query = getattr(self.bs, "query_stock_basic", None)
+        if not callable(query):
+            return None
+        try:
+            result = query(code=code)
+            for item in self._rows(result):
+                raw = (item.get("ipoDate") or "").strip()
+                if raw:
+                    date.fromisoformat(raw)
+                    return raw
+        except (BaoStockError, TypeError, ValueError):
+            return None
+        return None
+
     def _query_symbol(self, symbol: str, start_date: date, end_date: date) -> list[BarRow]:
         code = baostock_code(symbol)
+        ipo_date = self._stock_ipo_date(code)
         result = self.bs.query_history_k_data_plus(
             code,
             self.FIELDS,
@@ -81,10 +113,25 @@ class BaoStockClient:
                 low = float(item["low"])
                 close = float(item["close"])
                 trade_date = item["date"]
+                volume = _optional_float(item.get("volume"))
+                amount = _optional_float(item.get("amount"))
+                is_st = _optional_bool(item.get("isST"))
             except (KeyError, TypeError, ValueError):
                 continue
             rows.append(
-                (normalized, trade_date, open_price, high, low, close, turnover)
+                (
+                    normalized,
+                    trade_date,
+                    open_price,
+                    high,
+                    low,
+                    close,
+                    turnover,
+                    volume,
+                    amount,
+                    is_st,
+                    ipo_date,
+                )
             )
         return rows
 

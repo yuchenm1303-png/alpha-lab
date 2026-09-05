@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Iterable
+from datetime import date
 
 from app.repository import BarRow, PopularityRow
 
@@ -38,6 +38,30 @@ def _require_columns(reader: csv.DictReader, required: set[str]) -> None:
         raise ValueError(f"missing CSV columns: {', '.join(missing)}")
 
 
+def _optional_float(value: object) -> float | None:
+    raw = str(value or "").strip()
+    return float(raw) if raw else None
+
+
+def _optional_bool(value: object) -> bool | None:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return None
+    if raw in {"1", "true", "yes", "y"}:
+        return True
+    if raw in {"0", "false", "no", "n"}:
+        return False
+    raise ValueError(f"invalid boolean value: {value}")
+
+
+def _optional_date(value: object) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    date.fromisoformat(raw)
+    return raw
+
+
 def parse_bars_csv(content: bytes) -> list[BarRow]:
     reader = _reader(content)
     _require_columns(reader, BAR_COLUMNS)
@@ -53,6 +77,10 @@ def parse_bars_csv(content: bytes) -> list[BarRow]:
                     float(row["low"]),
                     float(row["close"]),
                     float(row["turnover_rate"]),
+                    _optional_float(row.get("volume")),
+                    _optional_float(row.get("amount")),
+                    _optional_bool(row.get("is_st")),
+                    _optional_date(row.get("ipo_date")),
                 )
             )
         except (TypeError, ValueError, KeyError) as exc:

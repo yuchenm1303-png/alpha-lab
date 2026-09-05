@@ -33,7 +33,7 @@ repository = MarketRepository(database)
 engine = EventStudyEngine(database)
 research_engine = ResearchEventStudyEngine(database)
 
-app = FastAPI(title="Alpha Lab", version="0.5.0")
+app = FastAPI(title="Alpha Lab", version="0.6.0")
 
 
 def require_write_access(
@@ -146,7 +146,13 @@ def sync_historical(request: HistoricalSyncRequest) -> HistoricalSyncResult:
     from app.services.sync import HistoricalSignalSyncService
 
     try:
-        summary = HistoricalSignalSyncService(HiThinkClient(), BaoStockClient(), repository).sync(
+        hithink = HiThinkClient()
+        summary = HistoricalSignalSyncService(
+            hithink,
+            BaoStockClient(),
+            repository,
+            factor_provider=hithink,
+        ).sync(
             request.start_date,
             request.end_date,
             max_rank=request.max_rank,
@@ -157,9 +163,11 @@ def sync_historical(request: HistoricalSyncRequest) -> HistoricalSyncResult:
     return HistoricalSyncResult(
         start_date=summary.start_date,
         end_date=summary.end_date,
+        bar_start_date=summary.bar_start_date,
         bar_end_date=summary.bar_end_date,
         popularity_rows=summary.popularity_rows,
         bar_rows=summary.bar_rows,
+        factor_rows=summary.factor_rows,
         unique_symbols=summary.unique_symbols,
         unsupported_symbols=list(summary.unsupported_symbols),
     )

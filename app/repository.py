@@ -5,28 +5,50 @@ from collections.abc import Sequence
 from app.db import Database
 
 
-BarRow = tuple[str, str, float, float, float, float, float]
+BarRow = tuple[
+    str,
+    str,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float | None,
+    float | None,
+    bool | None,
+    str | None,
+]
 PopularityRow = tuple[str, str, int, float | None]
 FactorRow = tuple[str, str, str, float, str | None]
+
+
+def _normalize_bar_row(row: Sequence[object]) -> tuple[object, ...]:
+    if len(row) == 7:
+        return (*row, None, None, None, None)
+    if len(row) == 11:
+        return tuple(row)
+    raise ValueError("bar row must contain 7 legacy fields or 11 normalized fields")
 
 
 class MarketRepository:
     def __init__(self, database: Database) -> None:
         self.database = database
 
-    def upsert_bars(self, rows: Sequence[BarRow]) -> int:
+    def upsert_bars(self, rows: Sequence[Sequence[object]]) -> int:
         if not rows:
             return 0
+        normalized = [_normalize_bar_row(row) for row in rows]
         with self.database.connect() as conn:
             conn.executemany(
                 """
                 INSERT OR REPLACE INTO daily_bars
-                (symbol, trade_date, open, high, low, close, turnover_rate)
-                VALUES (?, CAST(? AS DATE), ?, ?, ?, ?, ?)
+                (symbol, trade_date, open, high, low, close, turnover_rate,
+                 volume, amount, is_st, ipo_date)
+                VALUES (?, CAST(? AS DATE), ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS DATE))
                 """,
-                rows,
+                normalized,
             )
-        return len(rows)
+        return len(normalized)
 
     def upsert_factor_values(self, rows: Sequence[FactorRow]) -> int:
         if not rows:

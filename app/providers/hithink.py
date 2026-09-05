@@ -1,20 +1,41 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import requests
 
-from app.repository import PopularityRow
+from app.repository import FactorRow, PopularityRow
 from app.providers.symbols import normalize_thscode
 
 
 DEFAULT_BASE_URL = "https://fuyao.aicubes.cn"
+_LIMIT_POOL_PAGE_SIZE = 200
+_LIMIT_FACTOR_SOURCE = "hithink_limit_up_pool"
 
 
 class HiThinkError(RuntimeError):
     """HiThink Financial-API transport or business-contract error."""
+
+
+def _shanghai_midnight_ms(day: date) -> int:
+    point = datetime(day.year, day.month, day.day, tzinfo=ZoneInfo("Asia/Shanghai"))
+    return int(point.timestamp() * 1000)
+
+
+def _float_or_none(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
 
 
 class HiThinkClient:
@@ -51,7 +72,7 @@ class HiThinkClient:
 
         if not isinstance(payload, dict):
             raise HiThinkError("HiThink returned an invalid response envelope")
-        if payload.get("code") != 0:
+        if payload.get("code") not in (0, "0"):
             request_id = payload.get("request_id") or "unknown"
             message = payload.get("message") or "unknown error"
             raise HiThinkError(f"HiThink code={payload.get('code')} request_id={request_id}: {message}")
@@ -119,4 +140,85 @@ class HiThinkClient:
         rows: list[PopularityRow] = []
         for day in requested_days:
             rows.extend(self.fetch_hot_rank(day, max_rank=max_rank))
+        return rows
+
+    def fetch_limit_up_pool(
+        self,
+        day: date,
+        *,
+        symbols: Sequence[str] | None = None,
+    ) -> list[FactorRow]:
+        wanted = (
+            {normalize_thscode(symbol) for symbol in symbols}
+            if symbols is not None
+            else None
+        )
+        rows: list[FactorRow] = []
+        page = 1
+        while True:
+            data = self._get(
+                "/api/a-share/special-data/limit-up-pool",
+                params={
+                    "date_ms": _shanghai_midnight_ms(day),
+                    "page": page,
+                    "size": _LIMIT_POOL_PAGE_SIZE,
+                },
+            )
+            if not isinstance(data, dict):
+                raise HiThinkError("HiThink limit-up pool payload is missing")
+
+            items = data.get("item", [])
+            if not isinstance(items, list):
+                items = []
+            for item in items:
+                try:
+                    symbol = normalize_thscode(str(item["thscode"]))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if wanted is not None and symbol not in wanted:
+                    continue
+
+                trade_date = day.isoformat()
+                rows.append(
+                    (symbol, trade_date, "is_limit_up", 1.0, _LIMIT_FACTOR_SOURCE)
+                )
+                streak = _float_or_none(item.get("continue_day_cnt"))
+                if streak is not None:
+                    rows.append(
+                        (symbol, trade_date, "limit_up_streak", streak, _LIMIT_FACTOR_SOURCE)
+                    )
+                seal_money = _float_or_none(item.get("seal_money"))
+                if seal_money is not None:
+                    rows.append(
+                        (
+                            symbol,
+                            trade_date,
+                            "limit_up_seal_money",
+                            seal_money,
+                            _LIMIT_FACTOR_SOURCE,
+                        )
+                    )
+
+            pagination = data.get("pagination") or {}
+            try:
+                pages = max(1, int(pagination.get("pages") or 1))
+            except (TypeError, ValueError):
+                pages = 1
+            if page >= pages or not items:
+                break
+            page += 1
+        return rows
+
+    def fetch_factor_values(
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        symbols: Sequence[str] | None = None,
+    ) -> list[FactorRow]:
+        if start_date > end_date:
+            raise ValueError("start_date must be on or before end_date")
+        rows: list[FactorRow] = []
+        for day in self.trading_days(start_date, end_date):
+            rows.extend(self.fetch_limit_up_pool(day, symbols=symbols))
         return rows

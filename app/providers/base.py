@@ -4,7 +4,7 @@ from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import Protocol
 
-from app.repository import BarRow, PopularityRow
+from app.repository import BarRow, FactorRow, PopularityRow
 
 
 class PopularityProvider(Protocol):
@@ -28,3 +28,15 @@ class BarProvider(Protocol):
         start_date: date,
         end_date: date,
     ) -> tuple[list[BarRow], list[str]]: ...
+
+
+class FactorValueProvider(Protocol):
+    """Optional sparse point-in-time factor source."""
+
+    def fetch_factor_values(
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        symbols: Sequence[str] | None = None,
+    ) -> Iterable[FactorRow]: ...

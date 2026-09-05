@@ -140,9 +140,11 @@ class FactorInfo(BaseModel):
 class HistoricalSyncResult(BaseModel):
     start_date: date
     end_date: date
+    bar_start_date: date
     bar_end_date: date
     popularity_rows: int
     bar_rows: int
+    factor_rows: int
     unique_symbols: int
     unsupported_symbols: list[str]
 

@@ -34,14 +34,24 @@ def test_factor_registry_exposes_first_class_popularity_and_derived_factors():
     ids = {spec.id for spec in list_factor_specs()}
     assert {
         "turnover_rate",
+        "volume",
+        "amount",
         "change_pct",
         "amplitude",
         "intraday_return",
+        "volume_ratio_5d",
+        "float_market_cap_est",
+        "is_st",
+        "listing_age_days",
         "popularity_rank",
         "popularity_score",
+        "is_limit_up",
+        "limit_up_streak",
+        "limit_up_seal_money",
     } <= ids
     assert get_factor_spec("popularity_rank").storage == "timeseries"
     assert get_factor_spec("change_pct").storage == "derived"
+    assert get_factor_spec("is_limit_up").missing_value == 0.0
     with pytest.raises(ValueError, match="unsupported factor"):
         get_factor_spec("future_magic")
 
@@ -115,6 +125,58 @@ def test_generic_event_study_can_filter_derived_daily_change(tmp_path):
     assert page.samples[0].trade_date == date(2026, 1, 6)
     assert page.samples[0].factors["change_pct"] == pytest.approx(10.0)
     assert page.samples[0].forward_returns["1d"] == pytest.approx(-18.181818, abs=1e-5)
+
+
+def test_generic_event_study_supports_volume_status_scale_and_limit_factors(tmp_path):
+    db = Database(tmp_path / "richer.duckdb")
+    db.initialize()
+    repo = MarketRepository(db)
+    days = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"]
+    rich_rows = [
+        ("000001.SZ", day, 10.0, 10.5, 9.8, 10.1, 10.0, 100.0, 100_000_000.0, False, "2025-01-01")
+        for day in days
+    ]
+    rich_rows.extend(
+        [
+            ("000001.SZ", "2026-01-12", 10.1, 10.8, 10.0, 10.6, 10.0, 200.0, 200_000_000.0, True, "2025-01-01"),
+            ("000001.SZ", "2026-01-13", 10.6, 10.9, 10.4, 10.8, 10.0, 100.0, 100_000_000.0, False, "2025-01-01"),
+        ]
+    )
+    repo.upsert_bars(rich_rows)
+    repo.upsert_factor_values(
+        [("000001.SZ", "2026-01-12", "is_limit_up", 1.0, "test")]
+    )
+
+    request = ResearchEventStudyRequest(
+        start_date=date(2026, 1, 12),
+        end_date=date(2026, 1, 12),
+        filters=[
+            FactorFilter(factor_id="volume_ratio_5d", min_value=2, max_value=2),
+            FactorFilter(factor_id="float_market_cap_est", min_value=20, max_value=20),
+            FactorFilter(factor_id="is_st", min_value=1, max_value=1),
+            FactorFilter(factor_id="listing_age_days", min_value=300, max_value=500),
+            FactorFilter(factor_id="is_limit_up", min_value=1, max_value=1),
+        ],
+        horizons=[1],
+    )
+    engine = ResearchEventStudyEngine(db)
+    result = engine.run(request)
+    page = engine.samples(request, limit=10)
+
+    assert result.event_count == 1
+    assert page.samples[0].factors["volume_ratio_5d"] == pytest.approx(2.0)
+    assert page.samples[0].factors["float_market_cap_est"] == pytest.approx(20.0)
+    assert page.samples[0].factors["is_st"] == pytest.approx(1.0)
+    assert page.samples[0].factors["is_limit_up"] == pytest.approx(1.0)
+    assert 300 <= page.samples[0].factors["listing_age_days"] <= 500
+
+    non_limit_request = ResearchEventStudyRequest(
+        start_date=date(2026, 1, 13),
+        end_date=date(2026, 1, 13),
+        filters=[FactorFilter(factor_id="is_limit_up", min_value=0, max_value=0)],
+        horizons=[1],
+    )
+    assert engine.run(non_limit_request).event_count == 1
 
 
 def test_generic_event_study_rejects_unregistered_factor(tmp_path):

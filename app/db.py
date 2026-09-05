@@ -29,10 +29,28 @@ class Database:
                     low DOUBLE NOT NULL,
                     close DOUBLE NOT NULL,
                     turnover_rate DOUBLE NOT NULL,
+                    volume DOUBLE,
+                    amount DOUBLE,
+                    is_st BOOLEAN,
+                    ipo_date DATE,
                     PRIMARY KEY (symbol, trade_date)
                 )
                 """
             )
+            existing_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info('daily_bars')").fetchall()
+            }
+            for column_name, column_type in (
+                ("volume", "DOUBLE"),
+                ("amount", "DOUBLE"),
+                ("is_st", "BOOLEAN"),
+                ("ipo_date", "DATE"),
+            ):
+                if column_name not in existing_columns:
+                    conn.execute(
+                        f"ALTER TABLE daily_bars ADD COLUMN {column_name} {column_type}"
+                    )
+
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS popularity (
@@ -67,8 +85,6 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_factor_values_factor_date "
                 "ON factor_values(factor_id, trade_date)"
             )
-            # Backward-compatible migration: existing popularity rows become
-            # first-class time-series factors without deleting the legacy table.
             conn.execute(
                 """
                 INSERT OR REPLACE INTO factor_values

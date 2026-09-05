@@ -25,10 +25,12 @@ def main() -> None:
     args = parse_args()
     database = Database()
     database.initialize()
+    hithink = HiThinkClient()
     service = HistoricalSignalSyncService(
-        HiThinkClient(),
+        hithink,
         BaoStockClient(),
         MarketRepository(database),
+        factor_provider=hithink,
     )
     summary = service.sync(args.start, args.end, max_rank=args.max_rank)
     print(json.dumps(asdict(summary), ensure_ascii=False, default=str, indent=2))
