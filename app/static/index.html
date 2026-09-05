@@ -21,7 +21,7 @@
     button.secondary { background: #eef2f6; color: #172033; }
     button.danger { background: #fff1f0; color: #b42318; border: 1px solid #fecdca; }
     button:disabled { opacity: .5; cursor: not-allowed; }
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
     .metric { background: #f8fafc; border-radius: 12px; padding: 14px; }
     .metric strong { display: block; font-size: 22px; margin-top: 4px; }
     .table-wrap { overflow-x: auto; }
@@ -36,13 +36,14 @@
     .factor-row label { margin-top: 0; }
     .factor-row .remove { width: auto; min-width: 74px; margin: 0; }
     .factor-help { margin-top: 5px; font-size: 12px; color: #98a2b3; }
-    @media (max-width: 700px) {
-      .stats { grid-template-columns: 1fr; }
+    @media (max-width: 800px) {
+      .stats { grid-template-columns: 1fr 1fr; }
       .factor-row { grid-template-columns: 1fr; }
       .factor-row .remove { width: 100%; }
       .factor-toolbar { flex-direction: column; }
       .factor-toolbar button { width: 100%; }
     }
+    @media (max-width: 520px) { .stats { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -59,12 +60,25 @@
 
   <div class="grid">
     <section class="card">
-      <h3>同步真实数据</h3>
-      <p class="muted">HiThink 历史人气/涨停池 + BaoStock 前复权行情、换手率、成交量/额、ST/上市日期</p>
+      <h3>全市场行情库</h3>
+      <p class="muted">HiThink 全市场 daily-k + 除权除息事件，自动重建前复权研究价格。首次完整同步数据较大，正式环境优先使用 VPS CLI。</p>
+      <label>同步模式</label>
+      <select id="marketSyncMode">
+        <option value="auto" selected>自动（推荐）</option>
+        <option value="incremental">最近 10 个交易日增量</option>
+        <option value="full">完整重建</option>
+      </select>
+      <button id="marketSyncButton" onclick="syncMarket()">同步全市场行情</button>
+      <div id="marketSyncStatus" class="status"></div>
+    </section>
+
+    <section class="card">
+      <h3>同步特色因子</h3>
+      <p class="muted">HiThink 历史人气/涨停池 + BaoStock 换手率、成交量/额、ST/上市日期补充</p>
       <label>同步开始日期</label><input id="syncStart" type="date" />
       <label>同步结束日期</label><input id="syncEnd" type="date" />
       <label>只拉取人气 Top N</label><input id="syncRank" type="number" value="100" min="1" />
-      <button id="syncButton" onclick="syncHistorical()">同步真实数据</button>
+      <button id="syncButton" onclick="syncHistorical()">同步特色因子</button>
       <div id="syncStatus" class="status"></div>
     </section>
 
@@ -108,7 +122,8 @@
     <h3>统计结果</h3>
     <div class="stats">
       <div class="metric"><span class="muted">符合条件事件数</span><strong id="eventCount">—</strong></div>
-      <div class="metric"><span class="muted">数据日线条数</span><strong id="barCount">—</strong></div>
+      <div class="metric"><span class="muted">研究日线条数</span><strong id="researchBarCount">—</strong></div>
+      <div class="metric"><span class="muted">全市场原始日线</span><strong id="marketBarCount">—</strong></div>
       <div class="metric"><span class="muted">人气记录条数</span><strong id="popCount">—</strong></div>
     </div>
     <div class="table-wrap"><table>
@@ -253,22 +268,50 @@
   async function refreshHealth() {
     const res = await fetch('/api/health'); const data = await res.json();
     const notice = document.getElementById('runtimeNotice');
-    const button = document.getElementById('syncButton');
+    const syncButton = document.getElementById('syncButton');
+    const marketButton = document.getElementById('marketSyncButton');
     if (!data.persistent_storage) {
       notice.className = 'notice';
       notice.textContent = '当前是 Vercel 演示环境：数据库为临时存储，真实数据同步已禁用；页面统计功能可用。';
-      button.disabled = true;
+      syncButton.disabled = true;
+      marketButton.disabled = true;
     } else if (!data.write_auth_configured) {
       notice.className = 'notice';
       notice.textContent = '当前是持久环境，但服务器还未配置 ALPHALAB_ADMIN_TOKEN；所有写操作已禁用。';
-      button.disabled = true;
+      syncButton.disabled = true;
+      marketButton.disabled = true;
     } else if (!data.real_sync_configured) {
       notice.className = 'notice';
       notice.textContent = '写操作保护已启用，但还未配置 HITHINK_API_KEY；CSV 导入可用，真实同步暂不可用。';
-      button.disabled = true;
+      syncButton.disabled = true;
+      marketButton.disabled = true;
     } else {
       notice.className = 'notice ok';
-      notice.textContent = '真实数据同步已就绪：写操作受管理令牌保护。';
+      notice.textContent = '真实数据同步已就绪：全市场行情与特色因子写操作均受管理令牌保护。';
+      syncButton.disabled = false;
+      marketButton.disabled = false;
+    }
+  }
+
+  async function syncMarket() {
+    const status = document.getElementById('marketSyncStatus');
+    const button = document.getElementById('marketSyncButton');
+    const mode = document.getElementById('marketSyncMode').value;
+    status.textContent = mode === 'full' ? '完整同步中，数据量较大…' : '同步全市场行情中…';
+    button.disabled = true;
+    try {
+      const res = await fetch('/api/sync/market', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', ...writeHeaders()},
+        body: JSON.stringify({mode})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '全市场同步失败');
+      status.textContent = `完成：使用 ${data.mode_used} 模式，原始日线 ${Number(data.raw_rows).toLocaleString()} 条，研究日线 ${Number(data.research_rows).toLocaleString()} 条，复权事件 ${Number(data.adjustment_events).toLocaleString()} 条；覆盖 ${data.first_trade_date || '—'} 至 ${data.last_trade_date || '—'}`;
+      await refreshStats();
+    } catch (e) {
+      status.textContent = e.message;
+    } finally {
       button.disabled = false;
     }
   }
@@ -284,7 +327,7 @@
       const res = await fetch('/api/sync/historical', { method:'POST', headers:{'Content-Type':'application/json', ...writeHeaders()}, body:JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '同步失败');
-      status.textContent = `完成：${data.unique_symbols} 只股票，${data.bar_rows} 条行情，${data.popularity_rows} 条人气记录，${data.factor_rows} 条扩展因子；行情覆盖 ${data.bar_start_date} 至 ${data.bar_end_date}`;
+      status.textContent = `完成：${data.unique_symbols} 只股票，${data.bar_rows} 条补充日线，${data.popularity_rows} 条人气记录，${data.factor_rows} 条扩展因子；覆盖 ${data.bar_start_date} 至 ${data.bar_end_date}`;
       await refreshStats();
       document.getElementById('startDate').value = payload.start_date;
       document.getElementById('endDate').value = payload.end_date;
@@ -306,8 +349,9 @@
 
   async function refreshStats() {
     const res = await fetch('/api/data/stats'); const data = await res.json();
-    document.getElementById('barCount').textContent = data.bars.toLocaleString();
-    document.getElementById('popCount').textContent = data.popularity_rows.toLocaleString();
+    document.getElementById('researchBarCount').textContent = Number(data.research_bars || data.bars || 0).toLocaleString();
+    document.getElementById('marketBarCount').textContent = Number(data.market_bars || 0).toLocaleString();
+    document.getElementById('popCount').textContent = Number(data.popularity_rows || 0).toLocaleString();
   }
 
   async function analyze() {
