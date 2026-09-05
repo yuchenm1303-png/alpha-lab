@@ -3,155 +3,287 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Alpha Lab</title>
+  <title>Alpha Lab · A股事件研究</title>
   <style>
-    :root { font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; color-scheme: light; }
-    body { margin: 0; background: #f5f7fa; color: #172033; }
-    main { width: min(1100px, calc(100% - 32px)); margin: 40px auto 72px; }
-    h1 { margin-bottom: 6px; font-size: 32px; }
-    h3 { margin-top: 0; }
-    .muted { color: #667085; }
-    .notice { margin: 18px 0; padding: 13px 16px; border-radius: 12px; background: #fff7e8; border: 1px solid #f2d39d; color: #7a4b00; }
-    .notice.ok { background: #ecfdf3; border-color: #abefc6; color: #067647; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
-    .card { background: white; border: 1px solid #e6eaf0; border-radius: 16px; padding: 20px; box-shadow: 0 8px 24px rgba(16,24,40,.04); }
-    label { display: block; margin: 12px 0 6px; font-size: 13px; color: #475467; }
-    input, select, button { box-sizing: border-box; width: 100%; border-radius: 10px; border: 1px solid #d0d5dd; padding: 10px 12px; font: inherit; background: white; }
-    button { border: 0; background: #172033; color: white; cursor: pointer; font-weight: 600; margin-top: 16px; }
-    button.secondary { background: #eef2f6; color: #172033; }
-    button.danger { background: #fff1f0; color: #b42318; border: 1px solid #fecdca; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
-    .metric { background: #f8fafc; border-radius: 12px; padding: 14px; }
-    .metric strong { display: block; font-size: 22px; margin-top: 4px; }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; margin-top: 14px; white-space: nowrap; }
-    th, td { text-align: right; padding: 12px 10px; border-bottom: 1px solid #edf0f3; }
-    th:first-child, td:first-child { text-align: left; }
-    .status { min-height: 22px; margin-top: 10px; font-size: 13px; color: #475467; }
-    .factor-toolbar { display: flex; gap: 10px; margin-top: 14px; }
-    .factor-toolbar button { width: auto; margin-top: 0; }
-    .factor-row { display: grid; grid-template-columns: minmax(180px, 1.5fr) 1fr 1fr auto; gap: 10px; align-items: end; padding: 12px 0; border-bottom: 1px solid #edf0f3; }
-    .factor-row:last-child { border-bottom: 0; }
-    .factor-row label { margin-top: 0; }
-    .factor-row .remove { width: auto; min-width: 74px; margin: 0; }
-    .factor-help { margin-top: 5px; font-size: 12px; color: #98a2b3; }
-    @media (max-width: 800px) {
-      .stats { grid-template-columns: 1fr 1fr; }
-      .factor-row { grid-template-columns: 1fr; }
-      .factor-row .remove { width: 100%; }
-      .factor-toolbar { flex-direction: column; }
-      .factor-toolbar button { width: 100%; }
+    * { box-sizing: border-box; }
+    :root {
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: #122033;
+      background: #f4f7fb;
+      font-synthesis: none;
     }
-    @media (max-width: 520px) { .stats { grid-template-columns: 1fr; } }
+    body { margin: 0; min-width: 320px; background: #f4f7fb; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { max-width: 1420px; margin: 0 auto; padding: 28px 28px 72px; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 20px;
+      margin-bottom: 22px;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .logo {
+      width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
+      background: #17253d; color: white; font-weight: 800; letter-spacing: -1px;
+      box-shadow: 0 8px 24px rgba(23,37,61,.18);
+    }
+    .brand h1 { margin: 0; font-size: 24px; letter-spacing: -.4px; }
+    .brand p { margin: 3px 0 0; color: #7b8798; font-size: 13px; }
+    .runtime-pill {
+      display: inline-flex; align-items: center; gap: 8px; padding: 9px 13px; border-radius: 999px;
+      background: white; border: 1px solid #e1e7ef; color: #657387; font-size: 13px; font-weight: 600;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+    .runtime-pill.ok .dot { background: #10b981; }
+
+    .data-strip {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px;
+    }
+    .data-card {
+      background: white; border: 1px solid #e4e9f0; border-radius: 16px; padding: 16px 18px;
+      box-shadow: 0 5px 20px rgba(31,48,74,.035);
+    }
+    .data-card span { color: #8995a5; font-size: 12px; }
+    .data-card strong { display: block; margin-top: 5px; font-size: 22px; color: #17253d; }
+
+    .workspace { display: grid; grid-template-columns: 370px minmax(0,1fr); gap: 18px; align-items: start; }
+    .panel {
+      background: white; border: 1px solid #e4e9f0; border-radius: 20px;
+      box-shadow: 0 8px 28px rgba(31,48,74,.045);
+    }
+    .research-panel { padding: 22px; position: sticky; top: 18px; }
+    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    .panel-title h2, .panel-title h3 { margin: 0; font-size: 17px; }
+    .tag { padding: 5px 9px; border-radius: 999px; background: #edf4ff; color: #326bc5; font-size: 11px; font-weight: 700; }
+    label { display: block; margin: 12px 0 6px; font-size: 12px; color: #718096; font-weight: 600; }
+    input, select {
+      width: 100%; min-height: 42px; border: 1px solid #dbe2ea; border-radius: 11px;
+      padding: 9px 11px; background: #fff; color: #17253d; outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input:focus, select:focus { border-color: #6b91c9; box-shadow: 0 0 0 3px rgba(75,123,191,.10); }
+    .date-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .divider { height: 1px; background: #edf1f5; margin: 20px 0; }
+    .section-label { font-size: 13px; font-weight: 800; color: #34445a; }
+    .section-help { margin: 4px 0 10px; color: #95a0af; font-size: 11px; line-height: 1.5; }
+    .factor-row {
+      background: #f8fafc; border: 1px solid #edf1f5; border-radius: 13px; padding: 11px; margin-top: 10px;
+    }
+    .factor-head { display: flex; align-items: center; gap: 8px; }
+    .factor-head select { flex: 1; min-height: 38px; background: white; }
+    .remove-btn {
+      width: 34px; height: 34px; border: 0; border-radius: 9px; background: #fff0f0; color: #c24141;
+      font-size: 18px; line-height: 1;
+    }
+    .factor-range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 9px; }
+    .factor-range input { min-height: 38px; background: white; }
+    .factor-help { color: #9aa5b4; font-size: 10px; line-height: 1.4; margin-top: 6px; }
+    .factor-actions { display: flex; gap: 8px; margin-top: 11px; }
+    .small-btn {
+      flex: 1; border: 1px solid #dfe5ec; border-radius: 10px; background: white; color: #536377;
+      min-height: 38px; font-size: 12px; font-weight: 700;
+    }
+    .primary {
+      width: 100%; border: 0; border-radius: 12px; min-height: 48px; margin-top: 18px;
+      background: #17253d; color: white; font-weight: 800; letter-spacing: .2px;
+      box-shadow: 0 8px 18px rgba(23,37,61,.16);
+    }
+    .primary:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+    .status { min-height: 20px; margin-top: 9px; color: #738196; font-size: 11px; line-height: 1.5; }
+
+    .main-column { display: grid; gap: 18px; min-width: 0; }
+    .hero { padding: 25px; overflow: hidden; position: relative; }
+    .hero:after {
+      content: ""; position: absolute; right: -90px; top: -120px; width: 300px; height: 300px;
+      border-radius: 50%; background: radial-gradient(circle, rgba(54,112,193,.11), rgba(54,112,193,0) 68%); pointer-events: none;
+    }
+    .hero-copy { position: relative; z-index: 1; }
+    .eyebrow { color: #5b7fae; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.4px; }
+    .hero h2 { margin: 8px 0 7px; font-size: 25px; letter-spacing: -.5px; }
+    .hero p { margin: 0; color: #8190a3; font-size: 13px; line-height: 1.7; max-width: 720px; }
+
+    .kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: 11px; margin-top: 22px; position: relative; z-index: 1; }
+    .kpi { border: 1px solid #e7ebf1; background: #fbfcfe; border-radius: 14px; padding: 15px; }
+    .kpi span { color: #8a96a7; font-size: 11px; }
+    .kpi strong { display: block; margin-top: 6px; font-size: 22px; }
+    .kpi .positive { color: #d94a4a; }
+    .kpi .negative { color: #20865b; }
+
+    .content-panel { padding: 22px; }
+    .subhead { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .subhead h3 { margin: 0; font-size: 16px; }
+    .subhead p { margin: 3px 0 0; color: #97a2b0; font-size: 11px; }
+    .ghost-btn {
+      border: 1px solid #dfe5ec; background: white; color: #536377; border-radius: 10px;
+      padding: 8px 12px; font-size: 12px; font-weight: 700;
+    }
+    .ghost-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th { color: #8995a5; font-size: 11px; font-weight: 700; text-align: right; padding: 11px 10px; border-bottom: 1px solid #e9edf3; }
+    td { color: #36465b; font-size: 12px; text-align: right; padding: 13px 10px; border-bottom: 1px solid #f0f3f6; }
+    th:first-child, td:first-child { text-align: left; }
+    tbody tr:hover { background: #fafbfd; }
+    .empty { text-align: center !important; color: #9ba5b3; padding: 26px !important; }
+
+    details.panel { overflow: hidden; }
+    details.panel > summary {
+      list-style: none; cursor: pointer; padding: 18px 22px; font-weight: 800; font-size: 14px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    details.panel > summary::-webkit-details-marker { display: none; }
+    details.panel > summary:after { content: "+"; color: #7b8798; font-size: 20px; font-weight: 400; }
+    details.panel[open] > summary:after { content: "−"; }
+    .manage-body { border-top: 1px solid #edf1f5; padding: 20px 22px 22px; }
+    .notice { padding: 11px 13px; border-radius: 11px; background: #fff8e8; border: 1px solid #f3dfad; color: #8c6720; font-size: 11px; line-height: 1.55; margin-bottom: 14px; }
+    .notice.ok { background: #eefbf4; border-color: #cdeedc; color: #247451; }
+    .manage-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .manage-card { border: 1px solid #e6ebf0; border-radius: 14px; padding: 15px; background: #fbfcfd; }
+    .manage-card h4 { margin: 0 0 5px; font-size: 13px; }
+    .manage-card p { margin: 0 0 9px; color: #929eae; font-size: 10px; line-height: 1.5; }
+    .manage-card button { width: 100%; margin-top: 10px; min-height: 40px; border: 0; border-radius: 10px; background: #273b5a; color: white; font-weight: 700; }
+    .manage-card button.secondary { background: #edf1f6; color: #536377; }
+    .manage-card button:disabled { opacity: .45; cursor: not-allowed; }
+    .admin-row { display: grid; grid-template-columns: 150px 1fr; align-items: end; gap: 12px; margin-bottom: 16px; }
+
+    @media (max-width: 1050px) {
+      .workspace { grid-template-columns: 1fr; }
+      .research-panel { position: static; }
+      .data-strip, .kpis { grid-template-columns: repeat(2,1fr); }
+      .manage-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 650px) {
+      .shell { padding: 18px 14px 50px; }
+      .topbar { align-items: flex-start; }
+      .runtime-pill { display: none; }
+      .data-strip, .kpis { grid-template-columns: 1fr 1fr; }
+      .date-grid, .admin-row { grid-template-columns: 1fr; }
+      .hero { padding: 19px; }
+      .hero h2 { font-size: 21px; }
+    }
+    @media (max-width: 440px) { .data-strip, .kpis { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-<main>
-  <h1>Alpha Lab</h1>
-  <p class="muted">多因子历史事件研究：组合条件 → 后续 1 / 3 / 5 / 10 / 20 个交易日表现</p>
-  <div id="runtimeNotice" class="notice">正在检查数据运行环境…</div>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">α</div>
+      <div><h1>Alpha Lab</h1><p>A 股历史事件研究工作台</p></div>
+    </div>
+    <div id="runtimePill" class="runtime-pill"><span class="dot"></span><span id="runtimeText">检查环境中</span></div>
+  </header>
 
-  <section class="card" style="margin-bottom:16px">
-    <h3>管理写操作</h3>
-    <p class="muted">同步和 CSV 导入需要管理令牌。令牌只保留在当前页面内存，不写入浏览器存储。</p>
-    <label>管理令牌</label><input id="adminToken" type="password" autocomplete="off" placeholder="ALPHALAB_ADMIN_TOKEN" />
+  <section class="data-strip">
+    <div class="data-card"><span>研究日线</span><strong id="researchBarCount">—</strong></div>
+    <div class="data-card"><span>全市场原始日线</span><strong id="marketBarCount">—</strong></div>
+    <div class="data-card"><span>历史人气记录</span><strong id="popCount">—</strong></div>
+    <div class="data-card"><span>数据覆盖</span><strong id="dateCoverage" style="font-size:15px;margin-top:9px">—</strong></div>
   </section>
 
-  <div class="grid">
-    <section class="card">
-      <h3>全市场行情库</h3>
-      <p class="muted">HiThink 全市场 daily-k + 除权除息事件，自动重建前复权研究价格。首次完整同步数据较大，正式环境优先使用 VPS CLI。</p>
-      <label>同步模式</label>
-      <select id="marketSyncMode">
-        <option value="auto" selected>自动（推荐）</option>
-        <option value="incremental">最近 10 个交易日增量</option>
-        <option value="full">完整重建</option>
-      </select>
-      <button id="marketSyncButton" onclick="syncMarket()">同步全市场行情</button>
-      <div id="marketSyncStatus" class="status"></div>
-    </section>
-
-    <section class="card">
-      <h3>同步特色因子</h3>
-      <p class="muted">HiThink 历史人气/涨停池 + BaoStock 换手率、成交量/额、ST/上市日期补充</p>
-      <label>同步开始日期</label><input id="syncStart" type="date" />
-      <label>同步结束日期</label><input id="syncEnd" type="date" />
-      <label>只拉取人气 Top N</label><input id="syncRank" type="number" value="100" min="1" />
-      <button id="syncButton" onclick="syncHistorical()">同步特色因子</button>
-      <div id="syncStatus" class="status"></div>
-    </section>
-
-    <section class="card">
-      <h3>手工导入日线</h3>
-      <p class="muted">必填：symbol, trade_date, open, high, low, close, turnover_rate；可选：volume, amount, is_st, ipo_date</p>
-      <input id="barsFile" type="file" accept=".csv" />
-      <button class="secondary" onclick="upload('/api/import/bars','barsFile','barsStatus')">导入日线</button>
-      <div id="barsStatus" class="status"></div>
-    </section>
-
-    <section class="card">
-      <h3>手工导入历史人气</h3>
-      <p class="muted">CSV：symbol, trade_date, popularity_rank；score 可选</p>
-      <input id="popFile" type="file" accept=".csv" />
-      <button class="secondary" onclick="upload('/api/import/popularity','popFile','popStatus')">导入人气</button>
-      <div id="popStatus" class="status"></div>
-    </section>
-  </div>
-
-  <section class="card" style="margin-top:16px">
-    <h3>历史研究条件</h3>
-    <div class="grid">
-      <div><label>开始日期</label><input id="startDate" type="date" /></div>
-      <div><label>结束日期</label><input id="endDate" type="date" /></div>
-    </div>
-    <div style="margin-top:18px">
-      <strong>因子条件</strong>
-      <p class="muted" style="margin:6px 0 0">所有条件同时满足。留空一侧表示只限制下限或上限。</p>
-      <div id="factorRows"></div>
-      <div class="factor-toolbar">
-        <button class="secondary" type="button" onclick="addFactorRow()">+ 添加条件</button>
-        <button class="secondary" type="button" onclick="resetDefaultFactors()">恢复默认条件</button>
+  <div class="workspace">
+    <aside class="panel research-panel">
+      <div class="panel-title"><h2>研究条件</h2><span class="tag">EVENT STUDY</span></div>
+      <div class="date-grid">
+        <div><label>开始日期</label><input id="startDate" type="date" /></div>
+        <div><label>结束日期</label><input id="endDate" type="date" /></div>
       </div>
-    </div>
-    <button onclick="analyze()">开始统计</button>
-    <div id="analysisStatus" class="status"></div>
-  </section>
 
-  <section class="card" style="margin-top:16px">
-    <h3>统计结果</h3>
-    <div class="stats">
-      <div class="metric"><span class="muted">符合条件事件数</span><strong id="eventCount">—</strong></div>
-      <div class="metric"><span class="muted">研究日线条数</span><strong id="researchBarCount">—</strong></div>
-      <div class="metric"><span class="muted">全市场原始日线</span><strong id="marketBarCount">—</strong></div>
-      <div class="metric"><span class="muted">人气记录条数</span><strong id="popCount">—</strong></div>
-    </div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>未来交易日</th><th>有效样本</th><th>覆盖率</th><th>红盘率</th><th>平均涨幅</th><th>中位涨幅</th><th>波动</th></tr></thead>
-      <tbody id="resultBody"><tr><td colspan="7" class="muted">准备数据后开始统计</td></tr></tbody>
-    </table></div>
-  </section>
+      <div class="divider"></div>
+      <div class="section-label">因子条件</div>
+      <div class="section-help">所有条件同时满足。默认就是最初需求：换手率 + 人气排名。</div>
+      <div id="factorRows"></div>
+      <div class="factor-actions">
+        <button class="small-btn" type="button" onclick="addFactorRow()">+ 添加条件</button>
+        <button class="small-btn" type="button" onclick="resetDefaultFactors()">恢复默认</button>
+      </div>
+      <button id="analyzeButton" class="primary" onclick="analyze()">开始研究</button>
+      <div id="analysisStatus" class="status"></div>
+    </aside>
 
-  <section class="card" style="margin-top:16px">
-    <h3>样本明细</h3>
-    <p class="muted">用于核查统计结果。按事件日期倒序显示前 100 条符合条件的历史样本。</p>
-    <button id="sampleButton" class="secondary" onclick="loadSamples()" disabled>查看前 100 条样本</button>
-    <div id="sampleStatus" class="status"></div>
-    <div class="table-wrap"><table>
-      <thead id="sampleHead"><tr><th>日期</th><th>股票</th><th>事件收盘价</th><th>1日</th><th>3日</th><th>5日</th><th>10日</th><th>20日</th></tr></thead>
-      <tbody id="sampleBody"><tr><td colspan="8" class="muted">先运行一次统计</td></tr></tbody>
-    </table></div>
-  </section>
-</main>
+    <main class="main-column">
+      <section class="panel hero">
+        <div class="hero-copy">
+          <div class="eyebrow">Historical Signal Analysis</div>
+          <h2>条件出现后，股票后来表现怎么样？</h2>
+          <p>按历史时点筛选股票事件，统计未来 1 / 3 / 5 / 10 / 20 个交易日的红盘率、平均收益、中位数与样本覆盖率。</p>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><span>符合条件事件</span><strong id="eventCount">—</strong></div>
+          <div class="kpi"><span>次日红盘率</span><strong id="nextPositive">—</strong></div>
+          <div class="kpi"><span>次日平均涨幅</span><strong id="nextAverage">—</strong></div>
+          <div class="kpi"><span>5 日平均涨幅</span><strong id="fiveAverage">—</strong></div>
+        </div>
+      </section>
+
+      <section class="panel content-panel">
+        <div class="subhead"><div><h3>收益统计</h3><p>收益按事件日收盘至未来第 N 个有效交易日收盘计算</p></div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>未来交易日</th><th>有效样本</th><th>覆盖率</th><th>红盘率</th><th>平均涨幅</th><th>中位涨幅</th><th>波动</th></tr></thead>
+            <tbody id="resultBody"><tr><td colspan="7" class="empty">设置左侧条件后点击“开始研究”</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel content-panel">
+        <div class="subhead">
+          <div><h3>历史样本</h3><p>查看构成统计结果的具体股票与日期，方便人工核查</p></div>
+          <button id="sampleButton" class="ghost-btn" onclick="loadSamples()" disabled>查看前 100 条</button>
+        </div>
+        <div id="sampleStatus" class="status"></div>
+        <div class="table-wrap">
+          <table>
+            <thead id="sampleHead"><tr><th>日期</th><th>股票</th><th>事件收盘价</th><th>1日</th><th>3日</th><th>5日</th><th>10日</th><th>20日</th></tr></thead>
+            <tbody id="sampleBody"><tr><td colspan="8" class="empty">先运行一次研究</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <details class="panel">
+        <summary>数据管理 · 同步 / CSV 备用导入</summary>
+        <div class="manage-body">
+          <div id="runtimeNotice" class="notice">正在检查数据运行环境…</div>
+          <div class="admin-row">
+            <div><label>管理令牌</label><input id="adminToken" type="password" autocomplete="off" placeholder="ALPHALAB_ADMIN_TOKEN" /></div>
+            <div class="section-help">只有同步和导入需要令牌。正常研究查询不需要。</div>
+          </div>
+          <div class="manage-grid">
+            <div class="manage-card">
+              <h4>全市场行情</h4>
+              <p>同步 HiThink daily-k 与除权除息事件，生成前复权研究价格。</p>
+              <select id="marketSyncMode"><option value="auto" selected>自动（推荐）</option><option value="incremental">最近 10 个交易日增量</option><option value="full">完整重建</option></select>
+              <button id="marketSyncButton" onclick="syncMarket()">同步全市场</button>
+              <div id="marketSyncStatus" class="status"></div>
+            </div>
+            <div class="manage-card">
+              <h4>人气与特色因子</h4>
+              <p>同步历史人气、涨停池，以及换手率/ST 等补充字段。</p>
+              <div class="date-grid"><div><label>开始</label><input id="syncStart" type="date" /></div><div><label>结束</label><input id="syncEnd" type="date" /></div></div>
+              <label>人气 Top N</label><input id="syncRank" type="number" value="100" min="1" />
+              <button id="syncButton" onclick="syncHistorical()">同步特色因子</button>
+              <div id="syncStatus" class="status"></div>
+            </div>
+            <div class="manage-card">
+              <h4>CSV 备用导入</h4>
+              <p>只用于调试或离线数据。正常使用不需要手工导入。</p>
+              <label>日线 CSV</label><input id="barsFile" type="file" accept=".csv" />
+              <button class="secondary" onclick="upload('/api/import/bars','barsFile','barsStatus')">导入日线</button>
+              <div id="barsStatus" class="status"></div>
+              <label>历史人气 CSV</label><input id="popFile" type="file" accept=".csv" />
+              <button class="secondary" onclick="upload('/api/import/popularity','popFile','popStatus')">导入人气</button>
+              <div id="popStatus" class="status"></div>
+            </div>
+          </div>
+        </div>
+      </details>
+    </main>
+  </div>
+</div>
 <script>
-  const fmtPct = value => value == null ? '—' : `${Number(value).toFixed(2)}%`;
-  const price = value => value == null ? '—' : Number(value).toFixed(2);
-  const escapeHtml = value => String(value ?? '')
-    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
   const horizons = [1,3,5,10,20];
   let factorCatalog = [];
   let lastAnalysisPayload = null;
+  let healthState = null;
 
   const today = new Date();
   const monthAgo = new Date(today); monthAgo.setMonth(today.getMonth() - 1);
@@ -162,244 +294,179 @@
   document.getElementById('syncEnd').value = iso(today);
   document.getElementById('syncStart').value = iso(monthAgo);
 
-  function writeHeaders() { return { 'X-Admin-Token': document.getElementById('adminToken').value }; }
-  function factorInfo(id) { return factorCatalog.find(item => item.id === id); }
+  const escapeHtml = value => String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+  const fmtPct = value => value == null ? '—' : `${Number(value).toFixed(2)}%`;
+  const fmtNumber = value => value == null ? '—' : Number(value).toLocaleString('zh-CN', {maximumFractionDigits: 2});
+  const price = value => value == null ? '—' : Number(value).toFixed(2);
+  const writeHeaders = () => ({'X-Admin-Token': document.getElementById('adminToken').value});
+  const factorInfo = id => factorCatalog.find(item => item.id === id);
+
+  function colorReturn(element, value) {
+    element.classList.remove('positive','negative');
+    if (value == null) return;
+    if (Number(value) > 0) element.classList.add('positive');
+    if (Number(value) < 0) element.classList.add('negative');
+  }
 
   function formatFactor(value, factorId) {
     if (value == null) return '—';
     const info = factorInfo(factorId);
     if (info?.unit === '%') return fmtPct(value);
     if (info?.unit === 'rank') return String(Math.round(Number(value)));
-    const number = Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
-    return info?.unit && !['0/1', '倍', 'score', '股', '元', '亿元', '天'].includes(info.unit)
-      ? number
-      : `${number}${info?.unit === '0/1' || info?.unit === 'score' ? '' : info?.unit || ''}`;
+    const number = fmtNumber(value);
+    if (!info?.unit || ['0/1','score'].includes(info.unit)) return number;
+    return `${number}${info.unit}`;
   }
 
-  function selectedFactorIds() {
-    return [...document.querySelectorAll('.factor-row select')].map(el => el.value);
-  }
-
+  function selectedFactorIds() { return [...document.querySelectorAll('.factor-row select')].map(el => el.value); }
   function nextAvailableFactorId() {
     const selected = new Set(selectedFactorIds());
     return factorCatalog.find(item => !selected.has(item.id))?.id || factorCatalog[0]?.id || '';
   }
 
-  function addFactorRow(factorId = null, minValue = '', maxValue = '') {
+  function addFactorRow(factorId=null, minValue='', maxValue='') {
     if (!factorCatalog.length) return;
     const id = factorId || nextAvailableFactorId();
     if (!id) return;
-    const row = document.createElement('div');
-    row.className = 'factor-row';
-
-    const factorBox = document.createElement('div');
-    const factorLabel = document.createElement('label'); factorLabel.textContent = '因子';
+    const row = document.createElement('div'); row.className = 'factor-row';
+    const head = document.createElement('div'); head.className = 'factor-head';
     const select = document.createElement('select');
-    for (const factor of factorCatalog) {
-      const option = document.createElement('option');
-      option.value = factor.id;
-      option.textContent = `${factor.label} · ${factor.group}`;
-      if (factor.id === id) option.selected = true;
-      select.appendChild(option);
-    }
-    const help = document.createElement('div'); help.className = 'factor-help';
-    const updateHelp = () => { help.textContent = factorInfo(select.value)?.description || ''; };
-    select.addEventListener('change', updateHelp);
-    factorBox.append(factorLabel, select, help);
-
-    const minBox = document.createElement('div');
-    const minLabel = document.createElement('label'); minLabel.textContent = '最小值';
-    const minInput = document.createElement('input');
-    minInput.type = 'number'; minInput.step = 'any'; minInput.value = minValue; minInput.placeholder = '不限';
-    minBox.append(minLabel, minInput);
-
-    const maxBox = document.createElement('div');
-    const maxLabel = document.createElement('label'); maxLabel.textContent = '最大值';
-    const maxInput = document.createElement('input');
-    maxInput.type = 'number'; maxInput.step = 'any'; maxInput.value = maxValue; maxInput.placeholder = '不限';
-    maxBox.append(maxLabel, maxInput);
-
-    const remove = document.createElement('button');
-    remove.type = 'button'; remove.className = 'danger remove'; remove.textContent = '删除';
+    factorCatalog.forEach(factor => {
+      const option = document.createElement('option'); option.value = factor.id;
+      option.textContent = `${factor.label} · ${factor.group}`; option.selected = factor.id === id; select.appendChild(option);
+    });
+    const remove = document.createElement('button'); remove.type='button'; remove.className='remove-btn'; remove.textContent='×'; remove.title='删除条件';
     remove.addEventListener('click', () => row.remove());
-    row.append(factorBox, minBox, maxBox, remove);
-    document.getElementById('factorRows').appendChild(row);
-    updateHelp();
+    head.append(select, remove);
+    const range = document.createElement('div'); range.className='factor-range';
+    const minInput=document.createElement('input'); minInput.type='number'; minInput.step='any'; minInput.placeholder='最小值'; minInput.value=minValue;
+    const maxInput=document.createElement('input'); maxInput.type='number'; maxInput.step='any'; maxInput.placeholder='最大值'; maxInput.value=maxValue;
+    range.append(minInput,maxInput);
+    const help=document.createElement('div'); help.className='factor-help';
+    const updateHelp=()=>{ help.textContent=factorInfo(select.value)?.description || ''; };
+    select.addEventListener('change',updateHelp); row.append(head,range,help); document.getElementById('factorRows').appendChild(row); updateHelp();
   }
 
   function resetDefaultFactors() {
-    document.getElementById('factorRows').innerHTML = '';
-    if (factorInfo('turnover_rate')) addFactorRow('turnover_rate', 5, 15);
-    if (factorInfo('popularity_rank')) addFactorRow('popularity_rank', 1, 30);
+    document.getElementById('factorRows').innerHTML='';
+    if (factorInfo('turnover_rate')) addFactorRow('turnover_rate',5,15);
+    if (factorInfo('popularity_rank')) addFactorRow('popularity_rank',1,30);
   }
 
   function analysisPayload() {
-    const rows = [...document.querySelectorAll('.factor-row')];
-    const filters = rows.map(row => {
-      const factorId = row.querySelector('select').value;
-      const inputs = row.querySelectorAll('input');
-      const minRaw = inputs[0].value.trim();
-      const maxRaw = inputs[1].value.trim();
+    const filters=[...document.querySelectorAll('.factor-row')].map(row=>{
+      const factorId=row.querySelector('select').value; const inputs=row.querySelectorAll('input');
+      const minRaw=inputs[0].value.trim(); const maxRaw=inputs[1].value.trim();
       if (!minRaw && !maxRaw) throw new Error(`${factorInfo(factorId)?.label || factorId} 至少填写一个边界`);
-      return {
-        factor_id: factorId,
-        min_value: minRaw ? Number(minRaw) : null,
-        max_value: maxRaw ? Number(maxRaw) : null,
-      };
+      return {factor_id:factorId,min_value:minRaw?Number(minRaw):null,max_value:maxRaw?Number(maxRaw):null};
     });
-    const ids = filters.map(item => item.factor_id);
-    if (new Set(ids).size !== ids.length) throw new Error('同一个因子不能重复添加');
-    return {
-      start_date: document.getElementById('startDate').value,
-      end_date: document.getElementById('endDate').value,
-      filters,
-      horizons,
-    };
+    const ids=filters.map(x=>x.factor_id); if (new Set(ids).size!==ids.length) throw new Error('同一个因子不能重复添加');
+    return {start_date:document.getElementById('startDate').value,end_date:document.getElementById('endDate').value,filters,horizons};
   }
 
   async function loadFactors() {
-    const res = await fetch('/api/research/factors');
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '读取因子目录失败');
-    factorCatalog = data;
-    resetDefaultFactors();
+    const res=await fetch('/api/research/factors'); const data=await res.json();
+    if (!res.ok) throw new Error(data.detail || '读取因子目录失败'); factorCatalog=data; resetDefaultFactors();
   }
 
   async function refreshHealth() {
-    const res = await fetch('/api/health'); const data = await res.json();
-    const notice = document.getElementById('runtimeNotice');
-    const syncButton = document.getElementById('syncButton');
-    const marketButton = document.getElementById('marketSyncButton');
-    if (!data.persistent_storage) {
-      notice.className = 'notice';
-      notice.textContent = '当前是 Vercel 演示环境：数据库为临时存储，真实数据同步已禁用；页面统计功能可用。';
-      syncButton.disabled = true;
-      marketButton.disabled = true;
-    } else if (!data.write_auth_configured) {
-      notice.className = 'notice';
-      notice.textContent = '当前是持久环境，但服务器还未配置 ALPHALAB_ADMIN_TOKEN；所有写操作已禁用。';
-      syncButton.disabled = true;
-      marketButton.disabled = true;
-    } else if (!data.real_sync_configured) {
-      notice.className = 'notice';
-      notice.textContent = '写操作保护已启用，但还未配置 HITHINK_API_KEY；CSV 导入可用，真实同步暂不可用。';
-      syncButton.disabled = true;
-      marketButton.disabled = true;
+    const res=await fetch('/api/health'); healthState=await res.json();
+    const notice=document.getElementById('runtimeNotice'); const pill=document.getElementById('runtimePill'); const runtimeText=document.getElementById('runtimeText');
+    const syncButton=document.getElementById('syncButton'); const marketButton=document.getElementById('marketSyncButton');
+    if (!healthState.persistent_storage) {
+      notice.className='notice'; notice.textContent='当前为 Vercel 演示环境：页面可以直接研究演示数据；真实同步已禁用，正式版会使用持久数据库。';
+      runtimeText.textContent='演示环境'; syncButton.disabled=true; marketButton.disabled=true;
+    } else if (!healthState.write_auth_configured) {
+      notice.className='notice'; notice.textContent='当前为持久环境，但服务器尚未配置 ALPHALAB_ADMIN_TOKEN；查询可用，写操作禁用。';
+      runtimeText.textContent='持久环境 · 待配置'; syncButton.disabled=true; marketButton.disabled=true;
+    } else if (!healthState.real_sync_configured) {
+      notice.className='notice'; notice.textContent='持久环境已启用，但尚未配置 HITHINK_API_KEY；研究和 CSV 导入可用，在线同步暂不可用。';
+      runtimeText.textContent='持久环境 · 待数据源'; syncButton.disabled=true; marketButton.disabled=true;
     } else {
-      notice.className = 'notice ok';
-      notice.textContent = '真实数据同步已就绪：全市场行情与特色因子写操作均受管理令牌保护。';
-      syncButton.disabled = false;
-      marketButton.disabled = false;
+      notice.className='notice ok'; notice.textContent='真实数据同步已就绪。正常研究无需管理令牌，只有同步/导入操作需要。';
+      pill.classList.add('ok'); runtimeText.textContent='真实数据已就绪'; syncButton.disabled=false; marketButton.disabled=false;
     }
-  }
-
-  async function syncMarket() {
-    const status = document.getElementById('marketSyncStatus');
-    const button = document.getElementById('marketSyncButton');
-    const mode = document.getElementById('marketSyncMode').value;
-    status.textContent = mode === 'full' ? '完整同步中，数据量较大…' : '同步全市场行情中…';
-    button.disabled = true;
-    try {
-      const res = await fetch('/api/sync/market', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json', ...writeHeaders()},
-        body: JSON.stringify({mode})
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || '全市场同步失败');
-      status.textContent = `完成：使用 ${data.mode_used} 模式，原始日线 ${Number(data.raw_rows).toLocaleString()} 条，研究日线 ${Number(data.research_rows).toLocaleString()} 条，复权事件 ${Number(data.adjustment_events).toLocaleString()} 条；覆盖 ${data.first_trade_date || '—'} 至 ${data.last_trade_date || '—'}`;
-      await refreshStats();
-    } catch (e) {
-      status.textContent = e.message;
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  async function syncHistorical() {
-    const status = document.getElementById('syncStatus'); status.textContent = '同步中…';
-    const payload = {
-      start_date: document.getElementById('syncStart').value,
-      end_date: document.getElementById('syncEnd').value,
-      max_rank: Number(document.getElementById('syncRank').value)
-    };
-    try {
-      const res = await fetch('/api/sync/historical', { method:'POST', headers:{'Content-Type':'application/json', ...writeHeaders()}, body:JSON.stringify(payload) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || '同步失败');
-      status.textContent = `完成：${data.unique_symbols} 只股票，${data.bar_rows} 条补充日线，${data.popularity_rows} 条人气记录，${data.factor_rows} 条扩展因子；覆盖 ${data.bar_start_date} 至 ${data.bar_end_date}`;
-      await refreshStats();
-      document.getElementById('startDate').value = payload.start_date;
-      document.getElementById('endDate').value = payload.end_date;
-    } catch (e) { status.textContent = e.message; }
-  }
-
-  async function upload(url, inputId, statusId) {
-    const input = document.getElementById(inputId); const status = document.getElementById(statusId);
-    if (!input.files.length) { status.textContent = '请先选择 CSV 文件'; return; }
-    const form = new FormData(); form.append('file', input.files[0]);
-    status.textContent = '导入中…';
-    try {
-      const res = await fetch(url, { method: 'POST', headers: writeHeaders(), body: form }); const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || '导入失败');
-      status.textContent = `已导入 ${data.imported_rows} 条记录`;
-      await refreshStats();
-    } catch (e) { status.textContent = e.message; }
   }
 
   async function refreshStats() {
-    const res = await fetch('/api/data/stats'); const data = await res.json();
-    document.getElementById('researchBarCount').textContent = Number(data.research_bars || data.bars || 0).toLocaleString();
-    document.getElementById('marketBarCount').textContent = Number(data.market_bars || 0).toLocaleString();
-    document.getElementById('popCount').textContent = Number(data.popularity_rows || 0).toLocaleString();
+    const res=await fetch('/api/data/stats'); const data=await res.json();
+    document.getElementById('researchBarCount').textContent=fmtNumber(data.research_bars ?? data.bars ?? 0);
+    document.getElementById('marketBarCount').textContent=fmtNumber(data.market_raw_bars ?? 0);
+    document.getElementById('popCount').textContent=fmtNumber(data.popularity_rows ?? 0);
+    document.getElementById('dateCoverage').textContent=data.first_trade_date && data.last_trade_date ? `${data.first_trade_date} → ${data.last_trade_date}` : '暂无数据';
+    if (healthState && !healthState.persistent_storage && data.first_trade_date && data.last_trade_date) {
+      document.getElementById('startDate').value=data.first_trade_date; document.getElementById('endDate').value=data.last_trade_date;
+    }
+    return data;
   }
 
   async function analyze() {
-    const status = document.getElementById('analysisStatus'); status.textContent = '统计中…';
+    const status=document.getElementById('analysisStatus'); const button=document.getElementById('analyzeButton');
+    status.textContent='正在统计历史样本…'; button.disabled=true;
     try {
-      const payload = analysisPayload();
-      const res = await fetch('/api/research/event-study', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail?.[0]?.msg || data.detail || '统计失败');
-      document.getElementById('eventCount').textContent = data.event_count.toLocaleString();
-      document.getElementById('resultBody').innerHTML = data.stats.map(x => `<tr><td>${x.horizon} 日</td><td>${x.sample_count}</td><td>${fmtPct(x.coverage_rate)}</td><td>${fmtPct(x.positive_rate)}</td><td>${fmtPct(x.average_return)}</td><td>${fmtPct(x.median_return)}</td><td>${fmtPct(x.return_stddev)}</td></tr>`).join('');
-      status.textContent = `完成：找到 ${data.event_count} 个历史事件`;
-      lastAnalysisPayload = payload;
-      document.getElementById('sampleButton').disabled = false;
-      document.getElementById('sampleBody').innerHTML = '<tr><td class="muted">点击上方按钮查看本次条件的样本</td></tr>';
-      renderSampleHeader(payload);
-    } catch (e) { status.textContent = e.message; }
+      const payload=analysisPayload(); const res=await fetch('/api/research/event-study',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const data=await res.json(); if (!res.ok) throw new Error(data.detail?.[0]?.msg || data.detail || '统计失败');
+      document.getElementById('eventCount').textContent=fmtNumber(data.event_count);
+      const one=data.stats.find(x=>x.horizon===1); const five=data.stats.find(x=>x.horizon===5);
+      const nextPositive=document.getElementById('nextPositive'); const nextAverage=document.getElementById('nextAverage'); const fiveAverage=document.getElementById('fiveAverage');
+      nextPositive.textContent=fmtPct(one?.positive_rate); nextAverage.textContent=fmtPct(one?.average_return); fiveAverage.textContent=fmtPct(five?.average_return);
+      colorReturn(nextAverage,one?.average_return); colorReturn(fiveAverage,five?.average_return);
+      document.getElementById('resultBody').innerHTML=data.stats.map(x=>`<tr><td>${x.horizon} 日</td><td>${fmtNumber(x.sample_count)}</td><td>${fmtPct(x.coverage_rate)}</td><td>${fmtPct(x.positive_rate)}</td><td>${fmtPct(x.average_return)}</td><td>${fmtPct(x.median_return)}</td><td>${fmtPct(x.return_stddev)}</td></tr>`).join('');
+      status.textContent=`完成：找到 ${fmtNumber(data.event_count)} 个历史事件`; lastAnalysisPayload=payload; document.getElementById('sampleButton').disabled=false;
+      document.getElementById('sampleBody').innerHTML='<tr><td colspan="8" class="empty">点击“查看前 100 条”核查具体样本</td></tr>'; renderSampleHeader(payload);
+    } catch(e) { status.textContent=e.message; }
+    finally { button.disabled=false; }
   }
 
   function renderSampleHeader(payload) {
-    const factorHeaders = payload.filters.map(item => `<th>${escapeHtml(factorInfo(item.factor_id)?.label || item.factor_id)}</th>`).join('');
-    const returnHeaders = horizons.map(h => `<th>${h}日</th>`).join('');
-    document.getElementById('sampleHead').innerHTML = `<tr><th>日期</th><th>股票</th>${factorHeaders}<th>事件收盘价</th>${returnHeaders}</tr>`;
+    const factorHeaders=payload.filters.map(item=>`<th>${escapeHtml(factorInfo(item.factor_id)?.label || item.factor_id)}</th>`).join('');
+    const returnHeaders=horizons.map(h=>`<th>${h}日</th>`).join('');
+    document.getElementById('sampleHead').innerHTML=`<tr><th>日期</th><th>股票</th>${factorHeaders}<th>事件收盘价</th>${returnHeaders}</tr>`;
   }
 
   async function loadSamples() {
-    if (!lastAnalysisPayload) return;
-    const status = document.getElementById('sampleStatus'); status.textContent = '读取样本中…';
+    if (!lastAnalysisPayload) return; const status=document.getElementById('sampleStatus'); status.textContent='读取样本中…';
     try {
-      const res = await fetch('/api/research/event-study/samples?limit=100&offset=0', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(lastAnalysisPayload) });
-      const data = await res.json(); if (!res.ok) throw new Error(data.detail || '读取样本失败');
-      const factorIds = lastAnalysisPayload.filters.map(item => item.factor_id);
-      const factorCells = sample => factorIds.map(id => `<td>${escapeHtml(formatFactor(sample.factors[id], id))}</td>`).join('');
-      const returnCells = sample => horizons.map(h => `<td>${fmtPct(sample.forward_returns[`${h}d`])}</td>`).join('');
-      const colspan = 3 + factorIds.length + horizons.length;
-      document.getElementById('sampleBody').innerHTML = data.samples.length
-        ? data.samples.map(x => `<tr><td>${escapeHtml(x.trade_date)}</td><td>${escapeHtml(x.symbol)}</td>${factorCells(x)}<td>${price(x.close)}</td>${returnCells(x)}</tr>`).join('')
-        : `<tr><td colspan="${colspan}" class="muted">没有符合条件的样本</td></tr>`;
-      status.textContent = `共 ${data.total_count} 条，当前显示 ${data.samples.length} 条`;
-    } catch (e) { status.textContent = e.message; }
+      const res=await fetch('/api/research/event-study/samples?limit=100&offset=0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(lastAnalysisPayload)});
+      const data=await res.json(); if (!res.ok) throw new Error(data.detail || '读取样本失败');
+      const factorIds=lastAnalysisPayload.filters.map(x=>x.factor_id); const factorCells=s=>factorIds.map(id=>`<td>${escapeHtml(formatFactor(s.factors[id],id))}</td>`).join('');
+      const returnCells=s=>horizons.map(h=>`<td>${fmtPct(s.forward_returns[`${h}d`])}</td>`).join('');
+      const colspan=3+factorIds.length+horizons.length;
+      document.getElementById('sampleBody').innerHTML=data.samples.length?data.samples.map(x=>`<tr><td>${escapeHtml(x.trade_date)}</td><td>${escapeHtml(x.symbol)}</td>${factorCells(x)}<td>${price(x.close)}</td>${returnCells(x)}</tr>`).join(''):`<tr><td colspan="${colspan}" class="empty">没有符合条件的样本</td></tr>`;
+      status.textContent=`共 ${fmtNumber(data.total_count)} 条，当前显示 ${fmtNumber(data.samples.length)} 条`;
+    } catch(e) { status.textContent=e.message; }
+  }
+
+  async function syncMarket() {
+    const status=document.getElementById('marketSyncStatus'); const button=document.getElementById('marketSyncButton'); const mode=document.getElementById('marketSyncMode').value;
+    status.textContent=mode==='full'?'完整同步中，数据量较大…':'同步中…'; button.disabled=true;
+    try {
+      const res=await fetch('/api/sync/market',{method:'POST',headers:{'Content-Type':'application/json',...writeHeaders()},body:JSON.stringify({mode})}); const data=await res.json();
+      if (!res.ok) throw new Error(data.detail || '同步失败'); status.textContent=`完成：${data.mode_used}，研究日线 ${fmtNumber(data.research_rows)} 条，覆盖 ${data.first_trade_date || '—'} 至 ${data.last_trade_date || '—'}`; await refreshStats();
+    } catch(e) { status.textContent=e.message; } finally { if (healthState?.market_dump_sync_enabled) button.disabled=false; }
+  }
+
+  async function syncHistorical() {
+    const status=document.getElementById('syncStatus'); const button=document.getElementById('syncButton'); status.textContent='同步中…'; button.disabled=true;
+    const payload={start_date:document.getElementById('syncStart').value,end_date:document.getElementById('syncEnd').value,max_rank:Number(document.getElementById('syncRank').value)};
+    try {
+      const res=await fetch('/api/sync/historical',{method:'POST',headers:{'Content-Type':'application/json',...writeHeaders()},body:JSON.stringify(payload)}); const data=await res.json();
+      if (!res.ok) throw new Error(data.detail || '同步失败'); status.textContent=`完成：${fmtNumber(data.unique_symbols)} 只股票，${fmtNumber(data.popularity_rows)} 条人气，${fmtNumber(data.factor_rows)} 条扩展因子`; await refreshStats();
+    } catch(e) { status.textContent=e.message; } finally { if (healthState?.real_sync_enabled) button.disabled=false; }
+  }
+
+  async function upload(url,inputId,statusId) {
+    const input=document.getElementById(inputId); const status=document.getElementById(statusId); if (!input.files.length) { status.textContent='请先选择 CSV 文件'; return; }
+    const form=new FormData(); form.append('file',input.files[0]); status.textContent='导入中…';
+    try { const res=await fetch(url,{method:'POST',headers:writeHeaders(),body:form}); const data=await res.json(); if (!res.ok) throw new Error(data.detail || '导入失败'); status.textContent=`已导入 ${fmtNumber(data.imported_rows)} 条`; await refreshStats(); }
+    catch(e) { status.textContent=e.message; }
   }
 
   async function initialize() {
-    try { await loadFactors(); }
-    catch (e) { document.getElementById('analysisStatus').textContent = e.message; }
-    await Promise.all([refreshHealth(), refreshStats()]);
+    try { await loadFactors(); } catch(e) { document.getElementById('analysisStatus').textContent=e.message; }
+    try { await refreshHealth(); const stats=await refreshStats(); if (!healthState?.persistent_storage && (stats.bars || stats.research_bars)) await analyze(); }
+    catch(e) { document.getElementById('runtimeText').textContent='环境检查失败'; }
   }
-
   initialize();
 </script>
 </body>
