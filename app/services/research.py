@@ -115,7 +115,7 @@ class ResearchEventStudyEngine:
                 b.close AS base_close,
                 {self._lead_columns(request.horizons)}
                 {factor_sql}
-            FROM daily_bars b
+            FROM research_daily_bars b
             {' '.join(joins)}
         ),
         filtered AS (
