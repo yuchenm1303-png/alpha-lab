@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -15,6 +16,11 @@ from app.providers.symbols import normalize_thscode
 DEFAULT_BASE_URL = "https://fuyao.aicubes.cn"
 _LIMIT_POOL_PAGE_SIZE = 200
 _LIMIT_FACTOR_SOURCE = "hithink_limit_up_pool"
+_MARKET_DUMP_PATHS = {
+    "daily-k": "/api/dump/market-dumps/daily-k/download-url",
+    "daily-k-10d": "/api/dump/market-dumps/daily-k-10d/download-url",
+    "adjustment-factors": "/api/dump/market-dumps/adjustment-factors/download-url",
+}
 
 
 class HiThinkError(RuntimeError):
@@ -77,6 +83,42 @@ class HiThinkClient:
             message = payload.get("message") or "unknown error"
             raise HiThinkError(f"HiThink code={payload.get('code')} request_id={request_id}: {message}")
         return payload.get("data")
+
+    def get_market_dump_url(self, kind: str) -> str:
+        try:
+            path = _MARKET_DUMP_PATHS[kind]
+        except KeyError as exc:
+            raise ValueError(f"unsupported market dump kind: {kind}") from exc
+        data = self._get(path)
+        if not isinstance(data, dict):
+            raise HiThinkError(f"HiThink {kind} dump response is missing data")
+        url = data.get("presigned_url")
+        if not isinstance(url, str) or not url.startswith(("https://", "http://")):
+            raise HiThinkError(f"HiThink {kind} dump response is missing presigned_url")
+        return url
+
+    def download_market_dump(self, kind: str, destination: Path) -> Path:
+        url = self.get_market_dump_url(kind)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with requests.get(
+                url,
+                stream=True,
+                timeout=(10.0, 600.0),
+            ) as response:
+                if response.status_code != 200:
+                    raise HiThinkError(
+                        f"HiThink {kind} parquet download HTTP {response.status_code}"
+                    )
+                with destination.open("wb") as handle:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            handle.write(chunk)
+        except requests.RequestException as exc:
+            raise HiThinkError(f"HiThink {kind} parquet download failed: {exc}") from exc
+        if not destination.exists() or destination.stat().st_size == 0:
+            raise HiThinkError(f"HiThink {kind} parquet download returned an empty file")
+        return destination
 
     def trading_days(self, start_date: date | None = None, end_date: date | None = None) -> list[date]:
         data = self._get("/api/a-share/calendar/trading-days")
