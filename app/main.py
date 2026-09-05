@@ -18,6 +18,8 @@ from app.models import (
     HistoricalSyncRequest,
     HistoricalSyncResult,
     ImportResult,
+    MarketDumpSyncRequest,
+    MarketDumpSyncResult,
     ResearchEventSamplePage,
     ResearchEventStudyRequest,
 )
@@ -33,7 +35,7 @@ repository = MarketRepository(database)
 engine = EventStudyEngine(database)
 research_engine = ResearchEventStudyEngine(database)
 
-app = FastAPI(title="Alpha Lab", version="0.6.0")
+app = FastAPI(title="Alpha Lab", version="0.7.0")
 
 
 def require_write_access(
@@ -95,6 +97,7 @@ def health() -> dict[str, str | bool]:
         "write_auth_configured": write_auth_configured,
         "real_sync_configured": hithink_configured,
         "real_sync_enabled": (not is_vercel) and hithink_configured and write_auth_configured,
+        "market_dump_sync_enabled": (not is_vercel) and hithink_configured and write_auth_configured,
     }
 
 
@@ -170,6 +173,35 @@ def sync_historical(request: HistoricalSyncRequest) -> HistoricalSyncResult:
         factor_rows=summary.factor_rows,
         unique_symbols=summary.unique_symbols,
         unsupported_symbols=list(summary.unsupported_symbols),
+    )
+
+
+@app.post("/api/sync/market", response_model=MarketDumpSyncResult, dependencies=[Depends(require_write_access)])
+def sync_market(request: MarketDumpSyncRequest) -> MarketDumpSyncResult:
+    if os.getenv("VERCEL"):
+        raise HTTPException(
+            status_code=409,
+            detail="Whole-market dump sync is disabled on ephemeral Vercel storage.",
+        )
+
+    from app.providers.hithink import HiThinkClient, HiThinkError
+    from app.services.market_dump import MarketDumpError, MarketDumpSyncService
+
+    try:
+        summary = MarketDumpSyncService(HiThinkClient(), database).sync(request.mode)
+    except (HiThinkError, MarketDumpError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return MarketDumpSyncResult(
+        mode_requested=summary.mode_requested,
+        mode_used=summary.mode_used,
+        daily_rows=summary.daily_rows,
+        raw_rows=summary.raw_rows,
+        adjustment_events=summary.adjustment_events,
+        factor_rows=summary.factor_rows,
+        research_rows=summary.research_rows,
+        first_trade_date=summary.first_trade_date,
+        last_trade_date=summary.last_trade_date,
     )
 
 
